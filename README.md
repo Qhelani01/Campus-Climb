@@ -1,103 +1,202 @@
-# Campus Climb - WVSU Opportunities Platform
+# 🏔️ Campus Climb - WVSU Opportunities Platform
 
 A modern web application for managing and displaying career opportunities, internships, conferences, workshops, and competitions for WVSU students.
 
-## 🚀 Features
+## ✨ Features
 
-- **CSV-based Data Management**: Simple CSV file for easy data entry and management
-- **Modern Web Interface**: Responsive design with filtering and search capabilities
-- **FastAPI Backend**: High-performance Python backend with automatic API documentation
-- **Real-time Updates**: Instant data refresh when CSV file is modified
-- **Mobile Responsive**: Works seamlessly on all devices
-- **WVSU Authentication**: Secure login system for WVSU students only
-
-## 🏗️ Project Structure
-
-```
-campus-climb/
-├── backend/                 # FastAPI backend server
-│   ├── app/                # Main application code
-│   │   ├── api/           # API endpoints
-│   │   ├── core/          # Configuration and core utilities
-│   │   ├── models/        # Data models and schemas
-│   │   ├── services/      # Business logic
-│   │   └── main.py        # FastAPI application entry point
-│   ├── data/              # CSV data files
-│   ├── requirements.txt    # Python dependencies
-│   └── README.md          # Backend-specific documentation
-├── frontend/               # React frontend application
-│   ├── src/               # Source code
-│   ├── public/            # Static assets
-│   ├── package.json       # Node.js dependencies
-│   └── README.md          # Frontend-specific documentation
-├── docs/                  # Project documentation
-└── README.md              # This file
-```
+- **User Authentication**: WVSU email-only registration and secure login
+- **Opportunity Management**: Browse and search through various opportunities
+- **Responsive Design**: Mobile-first design that works on all devices
+- **Real-time Data**: CSV-based data management with API endpoints
+- **Modern UI**: Clean, professional interface with Tailwind CSS
+- **Search & Filter**: Find opportunities by type, category, and keywords
+- **API-First Architecture**: Separate frontend and backend for scalability
 
 ## 🛠️ Technology Stack
 
 ### Backend
-- **FastAPI**: Modern, fast Python web framework
-- **Pydantic**: Data validation and serialization
-- **SQLAlchemy**: Database ORM (we'll use SQLite for simplicity)
-- **Python 3.8+**: Modern Python features
+- **Flask**: Lightweight Python web framework
+- **SQLAlchemy**: Database ORM for data management
+- **SQLite**: Simple database for development
+- **Werkzeug**: Password hashing and security
+- **Flask-CORS**: Cross-origin resource sharing
 
 ### Frontend
-- **React 18**: Modern React with hooks
-- **TypeScript**: Type safety and better developer experience
-- **Tailwind CSS**: Utility-first CSS framework for rapid UI development
-- **Vite**: Fast build tool and development server
+- **HTML5**: Semantic markup
+- **Tailwind CSS**: Modern utility-first CSS framework
+- **JavaScript (ES6+)**: Modern JavaScript with async/await
+- **Fetch API**: HTTP requests to backend
+- **Local Storage**: Client-side session management
+
+## 📁 Project Structure
+
+```
+Campus Climb/
+├── backend/                 # Flask API backend
+│   ├── app/
+│   │   └── app.py         # Main Flask API application
+│   ├── data/
+│   │   └── opportunities.csv # Sample opportunities data
+│   ├── campus_climb.db    # SQLite database
+│   ├── requirements.txt    # Python dependencies
+│   └── README.md          # Backend documentation
+├── frontend/               # Frontend application
+│   ├── index.html         # Main HTML file
+│   ├── js/
+│   │   └── app.js        # Main JavaScript application
+│   ├── templates/        # Legacy templates (not used)
+│   ├── static/           # Static assets
+│   └── README.md         # Frontend documentation
+├── run.py                 # Backend startup script
+├── README.md              # This file
+└── .gitignore            # Git ignore rules
+```
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- Git
+- Python 3.8 or higher
+- Modern web browser
+- pip (Python package manager)
 
-### Backend Setup
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd Campus Climb
+   ```
+
+2. **Install backend dependencies**
+   ```bash
+   python3 -m pip install -r backend/requirements.txt
+   ```
+
+3. **Start the backend server**
+   ```bash
+   python3 run.py
+   ```
+
+4. **Access the frontend**
+   - Open `frontend/index.html` in your web browser
+   - Or serve with a local server:
+     ```bash
+     cd frontend
+     python3 -m http.server 3000
+     ```
+   - Then visit: `http://localhost:3000`
+
+5. **Register and login**
+   - Use a WVSU email address (@wvstateu.edu)
+   - Start exploring opportunities!
+
+## 📊 Data Management
+
+### Adding Opportunities
+1. Edit `backend/data/opportunities.csv` with new opportunities
+2. Restart the backend or call `/api/admin/load-csv` to reload data
+
+### CSV Format
+```csv
+title,company,location,type,category,description,requirements,salary,deadline,application_url
+"Job Title","Company Name","Location","type","category","Description","Requirements","Salary","YYYY-MM-DD","URL"
 ```
 
-### Frontend Setup
+## 🔐 Authentication
+
+- Only WVSU students with `@wvstateu.edu` email addresses can register
+- Passwords are securely hashed using bcrypt
+- Session management with localStorage on frontend
+
+## 🌐 API Endpoints
+
+### Opportunities
+- `GET /api/opportunities` - Get all opportunities with optional filtering
+- `GET /api/opportunities/<id>` - Get specific opportunity
+- `GET /api/opportunities/types` - Get all opportunity types
+- `GET /api/opportunities/categories` - Get all categories
+
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - User login
+- `GET /api/auth/profile` - Get user profile
+
+### Admin
+- `POST /api/admin/load-csv` - Reload data from CSV file
+- `GET /api/health` - Health check endpoint
+
+## 🎯 Learning Objectives
+
+This project demonstrates:
+- **Full-Stack Development**: Separate frontend and backend architecture
+- **API Design**: RESTful API endpoints with proper HTTP methods
+- **Database Design**: SQLAlchemy ORM and database relationships
+- **Authentication**: User registration, login, and session management
+- **Frontend Development**: Modern JavaScript with async/await
+- **Data Processing**: CSV import/export functionality
+- **Responsive Design**: Mobile-first web design
+- **Project Structure**: Organized code architecture
+
+## 🔧 Development
+
+### Running the Backend
+```bash
+python3 run.py
+```
+Backend will be available at: `http://localhost:8000`
+
+### Running the Frontend
 ```bash
 cd frontend
-npm install
-npm run dev
+python3 -m http.server 3000
 ```
+Frontend will be available at: `http://localhost:3000`
 
-## 📚 Learning Objectives
+### Database
+- SQLite database file: `backend/campus_climb.db`
+- Automatically created on first run
+- Data loaded from CSV file
 
-This project is designed to teach you:
-1. **Full-stack development** with modern technologies
-2. **API design** and RESTful principles
-3. **Database design** and data modeling
-4. **Authentication** and security best practices
-5. **Responsive web design** and modern UI/UX
-6. **Project structure** and code organization
-7. **Testing** and deployment strategies
+### Adding New Features
+1. **Backend**: Add routes in `backend/app/app.py`
+2. **Frontend**: Update `frontend/js/app.js` and `frontend/index.html`
+3. **Data**: Update CSV data as needed
 
-## 🎯 Why This Tech Stack?
+## 🏗️ Architecture Benefits
 
-- **FastAPI**: Industry-standard for modern Python APIs, great for learning async programming
-- **React + TypeScript**: Most in-demand frontend skills for SWE roles
-- **Tailwind CSS**: Rapid UI development, widely used in industry
-- **CSV + SQLite**: Simple data management that's easy to understand and modify
+### Separate Frontend/Backend
+- ✅ **Scalability**: Can scale frontend and backend independently
+- ✅ **Technology Flexibility**: Can use different frontend frameworks
+- ✅ **API-First**: Backend can serve multiple clients
+- ✅ **Modern Development**: Industry-standard architecture
+- ✅ **Learning Value**: Experience with both frontend and backend
 
-## 🔮 Future Enhancements
+### API Communication
+- **CORS Enabled**: Frontend can communicate with backend
+- **JSON Responses**: All API endpoints return JSON
+- **Error Handling**: Proper HTTP status codes and error messages
+- **Authentication**: Secure user authentication flow
 
-- User profiles and preferences
-- Email notifications for new opportunities
-- Admin dashboard for data management
-- Integration with WVSU student systems
-- Mobile app using React Native
-- Advanced search and filtering
-- Analytics and reporting
+## 🚀 Future Enhancements
+
+- [ ] React/Vue.js frontend migration
+- [ ] Advanced search and filtering
+- [ ] User favorites and bookmarks
+- [ ] Admin panel for data management
+- [ ] Email verification system
+- [ ] Password reset functionality
+- [ ] Opportunity application tracking
+- [ ] Analytics dashboard
+- [ ] Mobile app using React Native
+- [ ] Real-time notifications
+
+## 📝 License
+
+This project is for educational purposes and learning web development concepts.
+
+## 🤝 Contributing
+
+This is a learning project. Feel free to experiment and improve the code!
 
 ---
 
