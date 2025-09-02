@@ -442,7 +442,8 @@ class CampusClimbApp {
             }
         }
         
-        // Update stats
+        // Refresh data and update stats
+        this.loadOpportunities();
         this.updateDashboardStats();
         console.log('Dashboard shown successfully');
     }
@@ -472,8 +473,9 @@ class CampusClimbApp {
         document.getElementById('dashboardSection').classList.add('hidden');
         document.getElementById('opportunitiesSection').classList.remove('hidden');
         
-        // Render opportunities
-        this.renderOpportunitiesGrid();
+        // Refresh and render opportunities
+        this.loadOpportunities();
+        this.loadFilters();
     }
 
     ensureSingleSectionVisible() {
@@ -521,6 +523,15 @@ class CampusClimbApp {
                 }, 300);
             }, 3000);
         }
+    }
+
+    setupPeriodicRefresh() {
+        // Refresh data every 30 seconds for logged-in users
+        setInterval(() => {
+            if (this.currentUser) {
+                this.loadOpportunities();
+            }
+        }, 30000); // 30 seconds
     }
 }
 
