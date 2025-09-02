@@ -82,6 +82,19 @@ def is_wvsu_email(email):
     """Check if email ends with @wvstateu.edu"""
     return email.lower().endswith('@wvstateu.edu')
 
+def is_admin_email(email):
+    """Check if email is admin email"""
+    return email.lower() == 'admin@wvstateu.edu'
+
+def admin_required(f):
+    """Decorator to require admin authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # For now, we'll use a simple admin check
+        # In production, you'd want proper session management
+        return f(*args, **kwargs)
+    return decorated_function
+
 def load_opportunities_from_csv():
     """Load opportunities from CSV file"""
     csv_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'opportunities.csv')
@@ -233,12 +246,169 @@ def get_profile():
     else:
         return jsonify({'error': 'User not found'}), 404
 
+# Admin Authentication
+@app.route('/api/admin/login', methods=['POST'])
+def admin_login():
+    """Admin login endpoint"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    email = data.get('email', '').strip()
+    password = data.get('password', '')
+    
+    if not email or not password:
+        return jsonify({'error': 'Email and password are required'}), 400
+    
+    if not is_admin_email(email):
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    # For now, we'll use a simple admin password check
+    # In production, you'd want proper admin user management
+    if email.lower() == 'admin@wvstateu.edu' and password == 'admin123':
+        return jsonify({
+            'message': 'Admin login successful',
+            'admin': {
+                'email': email,
+                'role': 'admin'
+            }
+        })
+    else:
+        return jsonify({'error': 'Invalid admin credentials'}), 401
+
+# Admin Dashboard Routes
+@app.route('/api/admin/dashboard', methods=['GET'])
+def admin_dashboard():
+    """Get admin dashboard statistics"""
+    try:
+        total_users = User.query.count()
+        total_opportunities = Opportunity.query.count()
+        recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+        recent_opportunities = Opportunity.query.order_by(Opportunity.created_at.desc()).limit(5).all()
+        
+        return jsonify({
+            'total_users': total_users,
+            'total_opportunities': total_opportunities,
+            'recent_users': [user.to_dict() for user in recent_users],
+            'recent_opportunities': [opp.to_dict() for opp in recent_opportunities]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/users', methods=['GET'])
+def admin_get_users():
+    """Get all users for admin management"""
+    try:
+        users = User.query.order_by(User.created_at.desc()).all()
+        return jsonify([user.to_dict() for user in users])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+def admin_delete_user(user_id):
+    """Delete a user (admin only)"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'message': 'User deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/opportunities', methods=['GET'])
+def admin_get_opportunities():
+    """Get all opportunities for admin management"""
+    try:
+        opportunities = Opportunity.query.order_by(Opportunity.created_at.desc()).all()
+        return jsonify([opp.to_dict() for opp in opportunities])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/opportunities/<int:opp_id>', methods=['PUT'])
+def admin_update_opportunity(opp_id):
+    """Update an opportunity (admin only)"""
+    try:
+        opportunity = Opportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({'error': 'Opportunity not found'}), 404
+        
+        data = request.get_json()
+        if data.get('title'):
+            opportunity.title = data['title']
+        if data.get('company'):
+            opportunity.company = data['company']
+        if data.get('location'):
+            opportunity.location = data['location']
+        if data.get('type'):
+            opportunity.type = data['type']
+        if data.get('category'):
+            opportunity.category = data['category']
+        if data.get('description'):
+            opportunity.description = data['description']
+        if data.get('requirements'):
+            opportunity.requirements = data['requirements']
+        if data.get('salary'):
+            opportunity.salary = data['salary']
+        if data.get('deadline'):
+            opportunity.deadline = datetime.strptime(data['deadline'], '%Y-%m-%d').date()
+        if data.get('application_url'):
+            opportunity.application_url = data['application_url']
+        
+        db.session.commit()
+        return jsonify({'message': 'Opportunity updated successfully', 'opportunity': opportunity.to_dict()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/opportunities/<int:opp_id>', methods=['DELETE'])
+def admin_delete_opportunity(opp_id):
+    """Delete an opportunity (admin only)"""
+    try:
+        opportunity = Opportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({'error': 'Opportunity not found'}), 404
+        
+        db.session.delete(opportunity)
+        db.session.commit()
+        return jsonify({'message': 'Opportunity deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/admin/load-csv', methods=['POST'])
 def admin_load_csv():
     """Admin endpoint to reload CSV data"""
     try:
         load_opportunities_from_csv()
         return jsonify({'message': 'CSV data loaded successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/export-csv', methods=['GET'])
+def admin_export_csv():
+    """Export current opportunities to CSV"""
+    try:
+        opportunities = Opportunity.query.all()
+        
+        # Create CSV data
+        csv_data = []
+        for opp in opportunities:
+            csv_data.append({
+                'title': opp.title,
+                'company': opp.company,
+                'location': opp.location,
+                'type': opp.type,
+                'category': opp.category,
+                'description': opp.description,
+                'requirements': opp.requirements or '',
+                'salary': opp.salary or '',
+                'deadline': opp.deadline.isoformat() if opp.deadline else '',
+                'application_url': opp.application_url or ''
+            })
+        
+        return jsonify({'csv_data': csv_data})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
