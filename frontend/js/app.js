@@ -247,7 +247,8 @@ class CampusClimbApp {
                 </span>
                 <span class="text-sm text-gray-500">${formattedDate}</span>
             </div>
-            <h3 class="text-xl font-semibold text-gray-900 mb-3">${opportunity.title}</h3>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">${opportunity.title}</h3>
+            <div class="text-lg font-bold text-university-blue mb-3">${opportunity.company}</div>
             <p class="text-gray-600 mb-4 opportunity-description" data-full-description="${opportunity.description}">${shortDescription}</p>
             
             <!-- Expanded content (hidden by default) -->
