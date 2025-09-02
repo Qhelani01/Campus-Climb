@@ -95,6 +95,7 @@ class AdminPanel {
     showAdminLogin() {
         document.getElementById('adminLoginModal').classList.remove('hidden');
         document.getElementById('adminDashboard').classList.add('hidden');
+        this.clearLoginForm();
     }
 
     showAdminDashboard() {
@@ -107,7 +108,15 @@ class AdminPanel {
         this.isAuthenticated = false;
         localStorage.removeItem('adminEmail');
         this.showAdminLogin();
+        this.clearLoginForm();
         this.showMessage('Logged out successfully!', 'success');
+    }
+
+    clearLoginForm() {
+        // Clear the login form fields
+        document.getElementById('adminEmail').value = '';
+        document.getElementById('adminPassword').value = '';
+        document.getElementById('adminLoginMessage').textContent = '';
     }
 
     showSection(section) {
