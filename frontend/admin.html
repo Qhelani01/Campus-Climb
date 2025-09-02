@@ -345,6 +345,120 @@
         </div>
     </div>
 
+    <!-- Add/Edit Opportunity Modal -->
+    <div id="opportunityModal" class="fixed inset-0 modal flex items-center justify-center z-50 hidden">
+        <div class="modal-content p-8 max-w-2xl w-full mx-4">
+            <div class="text-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900 mb-2" id="modalTitle">Add Opportunity</h3>
+                <p class="text-gray-600" id="modalSubtitle">Enter opportunity details below</p>
+            </div>
+            
+            <form id="opportunityForm">
+                <input type="hidden" id="opportunityId" value="">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Title</label>
+                        <input type="text" id="opportunityTitle" class="input-field w-full px-4 py-3 text-gray-900" placeholder="Enter opportunity title" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Company</label>
+                        <input type="text" id="opportunityCompany" class="input-field w-full px-4 py-3 text-gray-900" placeholder="Enter company name" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Type</label>
+                        <select id="opportunityType" class="input-field w-full px-4 py-3 text-gray-900" required>
+                            <option value="">Select type</option>
+                            <option value="internship">Internship</option>
+                            <option value="job">Job</option>
+                            <option value="workshop">Workshop</option>
+                            <option value="conference">Conference</option>
+                            <option value="competition">Competition</option>
+                            <option value="scholarship">Scholarship</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Category</label>
+                        <select id="opportunityCategory" class="input-field w-full px-4 py-3 text-gray-900" required>
+                            <option value="">Select category</option>
+                            <option value="technology">Technology</option>
+                            <option value="business">Business</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="arts">Arts</option>
+                            <option value="science">Science</option>
+                            <option value="marketing">Marketing</option>
+                            <option value="design">Design</option>
+                            <option value="finance">Finance</option>
+                            <option value="education">Education</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Location</label>
+                        <input type="text" id="opportunityLocation" class="input-field w-full px-4 py-3 text-gray-900" placeholder="Enter location" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Deadline</label>
+                        <input type="date" id="opportunityDeadline" class="input-field w-full px-4 py-3 text-gray-900" required>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-3">Description</label>
+                    <textarea id="opportunityDescription" class="input-field w-full px-4 py-3 text-gray-900 h-32 resize-none" placeholder="Enter opportunity description" required></textarea>
+                </div>
+                
+                <div class="mt-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-3">Requirements</label>
+                    <textarea id="opportunityRequirements" class="input-field w-full px-4 py-3 text-gray-900 h-24 resize-none" placeholder="Enter requirements"></textarea>
+                </div>
+                
+                <div class="mt-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-3">Application Link</label>
+                    <input type="url" id="opportunityLink" class="input-field w-full px-4 py-3 text-gray-900" placeholder="https://example.com/apply">
+                </div>
+                
+                <div class="flex justify-end space-x-4 mt-8">
+                    <button type="button" id="cancelOpportunityBtn" class="px-6 py-3 rounded-xl font-semibold border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-300">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">
+                        <span id="submitBtnText">Add Opportunity</span>
+                    </button>
+                </div>
+            </form>
+            
+            <div id="opportunityMessage" class="mt-6 text-sm text-center"></div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="fixed inset-0 modal flex items-center justify-center z-50 hidden">
+        <div class="modal-content p-8 max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-3xl">🗑️</span>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">Confirm Delete</h3>
+                <p class="text-gray-600">Are you sure you want to delete this opportunity?</p>
+                <p class="text-sm font-semibold text-gray-800 mt-2" id="deleteOpportunityTitle"></p>
+            </div>
+            
+            <div class="flex justify-center space-x-4">
+                <button id="cancelDeleteBtn" class="px-6 py-3 rounded-xl font-semibold border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-300">
+                    Cancel
+                </button>
+                <button id="confirmDeleteBtn" class="btn-danger text-white px-6 py-3 rounded-xl font-semibold">
+                    Delete Opportunity
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/admin.js"></script>
 </body>
 </html>

@@ -49,6 +49,25 @@ class AdminPanel {
         document.getElementById('addOpportunityBtn').addEventListener('click', () => {
             this.showAddOpportunityModal();
         });
+
+        // Opportunity form
+        document.getElementById('opportunityForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleOpportunitySubmit();
+        });
+
+        // Modal buttons
+        document.getElementById('cancelOpportunityBtn').addEventListener('click', () => {
+            this.hideOpportunityModal();
+        });
+
+        document.getElementById('cancelDeleteBtn').addEventListener('click', () => {
+            this.hideDeleteModal();
+        });
+
+        document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+            this.confirmDeleteOpportunity();
+        });
     }
 
     checkAuthStatus() {
@@ -237,33 +256,7 @@ class AdminPanel {
         tbody.innerHTML = '';
 
         opportunities.forEach(opp => {
-            const row = document.createElement('tr');
-            row.className = 'table-row border-b border-gray-200';
-            row.innerHTML = `
-                <td class="py-3 px-4">
-                    <div>
-                        <p class="font-medium text-gray-900">${opp.title}</p>
-                        <p class="text-sm text-gray-600">${opp.location}</p>
-                    </div>
-                </td>
-                <td class="py-3 px-4 text-gray-700">${opp.company}</td>
-                <td class="py-3 px-4">
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        ${opp.type}
-                    </span>
-                </td>
-                <td class="py-3 px-4 text-gray-700">${opp.category}</td>
-                <td class="py-3 px-4">
-                    <div class="flex space-x-2">
-                        <button onclick="adminPanel.editOpportunity(${opp.id})" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                            ✏️ Edit
-                        </button>
-                        <button onclick="adminPanel.deleteOpportunity(${opp.id})" class="text-red-600 hover:text-red-700 text-sm font-medium">
-                            🗑️ Delete
-                        </button>
-                    </div>
-                </td>
-            `;
+            const row = this.createOpportunityRow(opp);
             tbody.appendChild(row);
         });
     }
@@ -446,6 +439,161 @@ class AdminPanel {
                 notification.remove();
             }, 3000);
         }
+    }
+
+    // Opportunity Management Methods
+    showAddOpportunityModal() {
+        this.currentOpportunityId = null;
+        document.getElementById('modalTitle').textContent = 'Add Opportunity';
+        document.getElementById('modalSubtitle').textContent = 'Enter opportunity details below';
+        document.getElementById('submitBtnText').textContent = 'Add Opportunity';
+        document.getElementById('opportunityForm').reset();
+        document.getElementById('opportunityModal').classList.remove('hidden');
+    }
+
+    showEditOpportunityModal(opportunity) {
+        this.currentOpportunityId = opportunity.id;
+        document.getElementById('modalTitle').textContent = 'Edit Opportunity';
+        document.getElementById('modalSubtitle').textContent = 'Update opportunity details below';
+        document.getElementById('submitBtnText').textContent = 'Update Opportunity';
+        
+        // Fill form with opportunity data
+        document.getElementById('opportunityId').value = opportunity.id;
+        document.getElementById('opportunityTitle').value = opportunity.title;
+        document.getElementById('opportunityCompany').value = opportunity.company;
+        document.getElementById('opportunityType').value = opportunity.type;
+        document.getElementById('opportunityCategory').value = opportunity.category;
+        document.getElementById('opportunityLocation').value = opportunity.location;
+        document.getElementById('opportunityDeadline').value = opportunity.deadline;
+        document.getElementById('opportunityDescription').value = opportunity.description;
+        document.getElementById('opportunityRequirements').value = opportunity.requirements || '';
+        document.getElementById('opportunityLink').value = opportunity.application_url || '';
+        
+        document.getElementById('opportunityModal').classList.remove('hidden');
+    }
+
+    hideOpportunityModal() {
+        document.getElementById('opportunityModal').classList.add('hidden');
+        document.getElementById('opportunityForm').reset();
+        document.getElementById('opportunityMessage').textContent = '';
+    }
+
+    async handleOpportunitySubmit() {
+        const formData = {
+            title: document.getElementById('opportunityTitle').value,
+            company: document.getElementById('opportunityCompany').value,
+            type: document.getElementById('opportunityType').value,
+            category: document.getElementById('opportunityCategory').value,
+            location: document.getElementById('opportunityLocation').value,
+            deadline: document.getElementById('opportunityDeadline').value,
+            description: document.getElementById('opportunityDescription').value,
+            requirements: document.getElementById('opportunityRequirements').value,
+            application_link: document.getElementById('opportunityLink').value
+        };
+
+        try {
+            const url = this.currentOpportunityId 
+                ? `${this.apiBaseUrl}/admin/opportunities/${this.currentOpportunityId}`
+                : `${this.apiBaseUrl}/admin/opportunities`;
+            
+            const method = this.currentOpportunityId ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                this.hideOpportunityModal();
+                this.showMessage(data.message, 'success');
+                this.loadOpportunities();
+                this.loadDashboardData();
+            } else {
+                this.showMessage(data.error || 'Failed to save opportunity.', 'error', 'opportunityMessage');
+            }
+        } catch (error) {
+            console.error('Error saving opportunity:', error);
+            this.showMessage('Failed to save opportunity.', 'error', 'opportunityMessage');
+        }
+    }
+
+    showDeleteConfirmation(opportunity) {
+        this.opportunityToDelete = opportunity;
+        document.getElementById('deleteOpportunityTitle').textContent = opportunity.title;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    hideDeleteModal() {
+        document.getElementById('deleteModal').classList.add('hidden');
+        this.opportunityToDelete = null;
+    }
+
+    async confirmDeleteOpportunity() {
+        if (!this.opportunityToDelete) return;
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities/${this.opportunityToDelete.id}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                this.hideDeleteModal();
+                this.showMessage(data.message, 'success');
+                this.loadOpportunities();
+                this.loadDashboardData();
+            } else {
+                this.showMessage(data.error || 'Failed to delete opportunity.', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting opportunity:', error);
+            this.showMessage('Failed to delete opportunity.', 'error');
+        }
+    }
+
+    createOpportunityRow(opportunity) {
+        const row = document.createElement('tr');
+        row.className = 'table-row border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200';
+        
+        row.innerHTML = `
+            <td class="py-4 px-4">
+                <div>
+                    <div class="font-semibold text-gray-900">${opportunity.title}</div>
+                    <div class="text-sm text-gray-500">${opportunity.location}</div>
+                </div>
+            </td>
+            <td class="py-4 px-4 text-gray-700">${opportunity.company}</td>
+            <td class="py-4 px-4">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    ${opportunity.type}
+                </span>
+            </td>
+            <td class="py-4 px-4">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    ${opportunity.category}
+                </span>
+            </td>
+            <td class="py-4 px-4">
+                <div class="flex space-x-2">
+                    <button onclick="window.adminPanel.showEditOpportunityModal(${JSON.stringify(opportunity).replace(/"/g, '&quot;')})" 
+                            class="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors duration-200">
+                        ✏️ Edit
+                    </button>
+                    <button onclick="window.adminPanel.showDeleteConfirmation(${JSON.stringify(opportunity).replace(/"/g, '&quot;')})" 
+                            class="text-red-600 hover:text-red-800 font-medium text-sm transition-colors duration-200">
+                        🗑️ Delete
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        return row;
     }
 }
 

@@ -337,6 +337,44 @@ def admin_get_opportunities():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/admin/opportunities', methods=['POST'])
+def admin_add_opportunity():
+    """Add a new opportunity"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['title', 'company', 'type', 'category', 'location', 'deadline', 'description']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'{field} is required'}), 400
+        
+        # Create new opportunity
+        new_opportunity = Opportunity(
+            title=data['title'],
+            company=data['company'],
+            type=data['type'],
+            category=data['category'],
+            location=data['location'],
+            deadline=datetime.strptime(data['deadline'], '%Y-%m-%d').date(),
+            description=data['description'],
+            requirements=data.get('requirements', ''),
+            application_url=data.get('application_link', ''),
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(new_opportunity)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Opportunity added successfully',
+            'opportunity': new_opportunity.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/admin/opportunities/<int:opp_id>', methods=['PUT'])
 def admin_update_opportunity(opp_id):
     """Update an opportunity (admin only)"""
@@ -364,8 +402,8 @@ def admin_update_opportunity(opp_id):
             opportunity.salary = data['salary']
         if data.get('deadline'):
             opportunity.deadline = datetime.strptime(data['deadline'], '%Y-%m-%d').date()
-        if data.get('application_url'):
-            opportunity.application_url = data['application_url']
+        if data.get('application_link'):
+            opportunity.application_url = data['application_link']
         
         db.session.commit()
         return jsonify({'message': 'Opportunity updated successfully', 'opportunity': opportunity.to_dict()})
