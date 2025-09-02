@@ -54,7 +54,8 @@ class AdminPanel {
     checkAuthStatus() {
         // Check if admin is already logged in
         const adminEmail = localStorage.getItem('adminEmail');
-        if (adminEmail === 'admin@wvstateu.edu') {
+        const adminEmails = ['qhestoemoyo@gmail.com', 'chiwalenatwange@gmail.com'];
+        if (adminEmails.includes(adminEmail)) {
             this.isAuthenticated = true;
             this.showAdminDashboard();
         } else {

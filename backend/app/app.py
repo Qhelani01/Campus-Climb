@@ -84,7 +84,16 @@ def is_wvsu_email(email):
 
 def is_admin_email(email):
     """Check if email is admin email"""
-    return email.lower() == 'admin@wvstateu.edu'
+    admin_emails = ['qhestoemoyo@gmail.com', 'chiwalenatwange@gmail.com']
+    return email.lower() in admin_emails
+
+def get_admin_password(email):
+    """Get admin password based on email"""
+    admin_credentials = {
+        'qhestoemoyo@gmail.com': '3991Gwabalanda',
+        'chiwalenatwange@gmail.com': 'noodles2001'
+    }
+    return admin_credentials.get(email.lower())
 
 def admin_required(f):
     """Decorator to require admin authentication"""
@@ -264,9 +273,9 @@ def admin_login():
     if not is_admin_email(email):
         return jsonify({'error': 'Admin access required'}), 403
     
-    # For now, we'll use a simple admin password check
-    # In production, you'd want proper admin user management
-    if email.lower() == 'admin@wvstateu.edu' and password == 'admin123':
+    # Check admin credentials
+    expected_password = get_admin_password(email)
+    if expected_password and password == expected_password:
         return jsonify({
             'message': 'Admin login successful',
             'admin': {
