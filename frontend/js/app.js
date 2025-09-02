@@ -218,6 +218,7 @@ class CampusClimbApp {
     createOpportunityCard(opportunity) {
         const card = document.createElement('div');
         card.className = 'card p-6 hover:shadow-lg transition-all duration-300';
+        card.dataset.opportunityId = opportunity.id;
         
         const typeColors = {
             'internship': 'bg-blue-100 text-blue-800',
@@ -234,6 +235,11 @@ class CampusClimbApp {
             day: 'numeric'
         });
 
+        // Truncate description for initial view
+        const shortDescription = opportunity.description.length > 150 
+            ? opportunity.description.substring(0, 150) + '...' 
+            : opportunity.description;
+
         card.innerHTML = `
             <div class="flex justify-between items-start mb-4">
                 <span class="px-3 py-1 rounded-full text-xs font-semibold ${typeColor}">
@@ -241,15 +247,57 @@ class CampusClimbApp {
                 </span>
                 <span class="text-sm text-gray-500">${formattedDate}</span>
             </div>
-            <h3 class="text-xl font-semibold text-gray-900 mb-3 line-clamp-2">${opportunity.title}</h3>
-            <p class="text-gray-600 mb-4 line-clamp-3">${opportunity.description}</p>
+            <h3 class="text-xl font-semibold text-gray-900 mb-3">${opportunity.title}</h3>
+            <p class="text-gray-600 mb-4 opportunity-description" data-full-description="${opportunity.description}">${shortDescription}</p>
+            
+            <!-- Expanded content (hidden by default) -->
+            <div class="expanded-content hidden">
+                <div class="border-t border-gray-200 pt-4 mb-4">
+                    <h4 class="text-lg font-semibold text-gray-900 mb-3">Full Description</h4>
+                    <p class="text-gray-700 leading-relaxed mb-6">${opportunity.description}</p>
+                    
+                    ${opportunity.requirements ? `
+                        <div class="mb-6">
+                            <h4 class="text-lg font-semibold text-gray-900 mb-3">Requirements</h4>
+                            <p class="text-gray-700 leading-relaxed">${opportunity.requirements}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="flex items-center justify-between">
+                        <div class="text-sm text-gray-600">
+                            <span class="font-medium">Location:</span> ${opportunity.location}
+                        </div>
+                        <div class="text-sm text-gray-600">
+                            <span class="font-medium">Company:</span> ${opportunity.company}
+                        </div>
+                    </div>
+                </div>
+                
+                ${opportunity.application_url ? `
+                    <div class="text-center">
+                        <a href="${opportunity.application_url}" target="_blank" rel="noopener noreferrer" 
+                           class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                            🚀 Apply Now
+                        </a>
+                    </div>
+                ` : `
+                    <div class="text-center">
+                        <p class="text-gray-500 text-sm">Application link not available</p>
+                    </div>
+                `}
+            </div>
+            
             <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700">${opportunity.category}</span>
-                <button class="text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors">
+                <button class="learn-more-btn text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors">
                     Learn More →
                 </button>
             </div>
         `;
+
+        // Add event listener for Learn More button
+        const learnMoreBtn = card.querySelector('.learn-more-btn');
+        learnMoreBtn.addEventListener('click', () => this.toggleOpportunityExpansion(card));
 
         return card;
     }
@@ -532,6 +580,29 @@ class CampusClimbApp {
                 this.loadOpportunities();
             }
         }, 30000); // 30 seconds
+    }
+
+    toggleOpportunityExpansion(card) {
+        const expandedContent = card.querySelector('.expanded-content');
+        const learnMoreBtn = card.querySelector('.learn-more-btn');
+        const isExpanded = !expandedContent.classList.contains('hidden');
+        
+        if (isExpanded) {
+            // Collapse
+            expandedContent.classList.add('hidden');
+            learnMoreBtn.textContent = 'Learn More →';
+            card.classList.remove('expanded');
+        } else {
+            // Expand
+            expandedContent.classList.remove('hidden');
+            learnMoreBtn.textContent = 'Show Less ←';
+            card.classList.add('expanded');
+            
+            // Smooth scroll to show the expanded content
+            setTimeout(() => {
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+        }
     }
 }
 

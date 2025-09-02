@@ -200,6 +200,50 @@
             color: #059669;
         }
         
+        /* Expanded opportunity card styles */
+        .card.expanded {
+            transform: scale(1.02);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            border-color: #1e40af;
+        }
+        
+        .expanded-content {
+            animation: expandContent 0.3s ease-out;
+        }
+        
+        @keyframes expandContent {
+            from {
+                opacity: 0;
+                max-height: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                max-height: 1000px;
+                transform: translateY(0);
+            }
+        }
+        
+        .learn-more-btn {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .learn-more-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(30, 64, 175, 0.1), transparent);
+            transition: left 0.5s;
+        }
+        
+                .learn-more-btn:hover::before {
+            left: 100%;
+        }
+        
         .bg-university-blue {
             background-color: #1e40af;
         }
