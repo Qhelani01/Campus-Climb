@@ -89,6 +89,14 @@ def is_admin_email(email):
     admin_emails = ['qhestoemoyo@gmail.com', 'chiwalenatwange@gmail.com']
     return email.lower() in admin_emails
 
+def get_admin_password(email):
+    """Get admin password based on email"""
+    admin_credentials = {
+        'qhestoemoyo@gmail.com': '3991Gwabalanda',
+        'chiwalenatwange@gmail.com': 'noodles2001'
+    }
+    return admin_credentials.get(email.lower())
+
 def admin_required(f):
     """Decorator to require admin authentication"""
     @wraps(f)
@@ -290,14 +298,31 @@ def login():
         if not email or not password:
             return jsonify({'error': 'Email and password are required'}), 400
         
-        # Check if it's a WVSU email
-        if not is_wvsu_email(email):
-            return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
-        
         # Initialize database if needed
         if hasattr(app, 'init_db') and not hasattr(app, '_db_initialized'):
             app.init_db()
             app._db_initialized = True
+        
+        # Check if it's an admin login first
+        if is_admin_email(email):
+            expected_password = get_admin_password(email)
+            if expected_password and password == expected_password:
+                return jsonify({
+                    'message': 'Admin login successful',
+                    'user': {
+                        'id': 0,
+                        'email': email,
+                        'first_name': 'Admin',
+                        'last_name': 'User',
+                        'is_admin': True
+                    }
+                })
+            else:
+                return jsonify({'error': 'Invalid admin credentials'}), 401
+        
+        # Regular user login - check WVSU email
+        if not is_wvsu_email(email):
+            return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
         
         user = User.query.filter_by(email=email).first()
         
@@ -316,6 +341,139 @@ def login():
         else:
             return jsonify({'error': 'Invalid credentials'}), 401
             
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Admin endpoints
+@app.route('/api/admin/opportunities', methods=['POST'])
+@admin_required
+def admin_create_opportunity():
+    """Create a new opportunity (admin only)"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['title', 'company', 'location', 'type', 'category', 'description']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'{field} is required'}), 400
+        
+        new_opportunity = Opportunity(
+            title=data['title'],
+            company=data['company'],
+            location=data['location'],
+            type=data['type'],
+            category=data['category'],
+            description=data['description'],
+            requirements=data.get('requirements', ''),
+            salary=data.get('salary', ''),
+            application_url=data.get('application_url', '')
+        )
+        
+        db.session.add(new_opportunity)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Opportunity created successfully',
+            'opportunity': new_opportunity.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/opportunities/<int:opp_id>', methods=['PUT'])
+@admin_required
+def admin_update_opportunity(opp_id):
+    """Update an opportunity (admin only)"""
+    try:
+        opportunity = Opportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({'error': 'Opportunity not found'}), 404
+        
+        data = request.get_json()
+        if data.get('title'):
+            opportunity.title = data['title']
+        if data.get('company'):
+            opportunity.company = data['company']
+        if data.get('location'):
+            opportunity.location = data['location']
+        if data.get('type'):
+            opportunity.type = data['type']
+        if data.get('category'):
+            opportunity.category = data['category']
+        if data.get('description'):
+            opportunity.description = data['description']
+        if data.get('requirements'):
+            opportunity.requirements = data['requirements']
+        if data.get('salary'):
+            opportunity.salary = data['salary']
+        if data.get('deadline'):
+            opportunity.deadline = datetime.strptime(data['deadline'], '%Y-%m-%d').date()
+        if data.get('application_url'):
+            opportunity.application_url = data['application_url']
+        
+        db.session.commit()
+        return jsonify({'message': 'Opportunity updated successfully', 'opportunity': opportunity.to_dict()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/opportunities/<int:opp_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_opportunity(opp_id):
+    """Delete an opportunity (admin only)"""
+    try:
+        opportunity = Opportunity.query.get(opp_id)
+        if not opportunity:
+            return jsonify({'error': 'Opportunity not found'}), 404
+        
+        db.session.delete(opportunity)
+        db.session.commit()
+        return jsonify({'message': 'Opportunity deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/load-csv', methods=['POST'])
+@admin_required
+def admin_load_csv():
+    """Admin endpoint to reload CSV data"""
+    try:
+        # Clear existing opportunities
+        Opportunity.query.delete()
+        db.session.commit()
+        
+        # Load from CSV
+        load_opportunities_from_csv()
+        return jsonify({'message': 'CSV data loaded successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/export-csv', methods=['GET'])
+@admin_required
+def admin_export_csv():
+    """Export current opportunities to CSV"""
+    try:
+        opportunities = Opportunity.query.all()
+        
+        # Create CSV data
+        csv_data = []
+        for opp in opportunities:
+            csv_data.append({
+                'title': opp.title,
+                'company': opp.company,
+                'location': opp.location,
+                'type': opp.type,
+                'category': opp.category,
+                'description': opp.description,
+                'requirements': opp.requirements or '',
+                'salary': opp.salary or '',
+                'deadline': opp.deadline.isoformat() if opp.deadline else '',
+                'application_url': opp.application_url or ''
+            })
+        
+        return jsonify({'csv_data': csv_data})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
