@@ -23,11 +23,5 @@
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
-  ],
-  "functions": {
-    "api/index.py": {
-      "runtime": "python3.9",
-      "includeFiles": "api/**"
-    }
-  }
+  ]
 }

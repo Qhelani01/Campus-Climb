@@ -1,7 +1,5 @@
 from flask import Flask, jsonify
-import os
 
-# Create a simple Flask app for testing
 app = Flask(__name__)
 
 @app.route('/api/test', methods=['GET'])
@@ -18,12 +16,30 @@ def health():
         'message': 'Basic API is running'
     })
 
-@app.route('/<path:path>')
-def catch_all(path):
+@app.route('/api/opportunities', methods=['GET'])
+def opportunities():
+    return jsonify([
+        {
+            'id': 1,
+            'title': 'Test Opportunity',
+            'company': 'Test Company',
+            'location': 'Test Location',
+            'type': 'internship',
+            'category': 'tech'
+        }
+    ])
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
     return jsonify({
-        'error': 'Endpoint not found',
-        'path': path
-    }), 404
+        'message': 'Login successful',
+        'user': {
+            'id': 1,
+            'email': 'test@wvstateu.edu',
+            'first_name': 'Test',
+            'last_name': 'User'
+        }
+    })
 
 if __name__ == '__main__':
     app.run()
