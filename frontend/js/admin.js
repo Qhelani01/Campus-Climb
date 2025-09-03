@@ -87,7 +87,7 @@ class AdminPanel {
         const password = document.getElementById('adminPassword').value;
 
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/login`, {
+            const response = await fetch(`${this.apiBaseUrl}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ class AdminPanel {
 
             const data = await response.json();
 
-            if (response.ok) {
+            if (response.ok && data.user && data.user.is_admin) {
                 this.isAuthenticated = true;
                 localStorage.setItem('adminEmail', email);
                 this.showAdminDashboard();

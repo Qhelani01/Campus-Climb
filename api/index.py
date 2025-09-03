@@ -477,5 +477,49 @@ def admin_export_csv():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/admin/dashboard', methods=['GET'])
+@admin_required
+def admin_dashboard():
+    """Get admin dashboard data"""
+    try:
+        # Get basic stats
+        total_users = User.query.count()
+        total_opportunities = Opportunity.query.count()
+        
+        # Get recent users (last 5)
+        recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+        
+        # Get recent opportunities (last 5)
+        recent_opportunities = Opportunity.query.order_by(Opportunity.created_at.desc()).limit(5).all()
+        
+        return jsonify({
+            'total_users': total_users,
+            'total_opportunities': total_opportunities,
+            'recent_users': [user.to_dict() for user in recent_users],
+            'recent_opportunities': [opp.to_dict() for opp in recent_opportunities]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/opportunities', methods=['GET'])
+@admin_required
+def admin_get_opportunities():
+    """Get all opportunities for admin"""
+    try:
+        opportunities = Opportunity.query.order_by(Opportunity.created_at.desc()).all()
+        return jsonify([opp.to_dict() for opp in opportunities])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/users', methods=['GET'])
+@admin_required
+def admin_get_users():
+    """Get all users for admin"""
+    try:
+        users = User.query.order_by(User.created_at.desc()).all()
+        return jsonify([user.to_dict() for user in users])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run()
