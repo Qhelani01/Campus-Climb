@@ -1,33 +1,29 @@
+from flask import Flask, jsonify
 import os
-import sys
-import traceback
 
-try:
-    # Add the backend directory to Python path
-    backend_path = os.path.join(os.path.dirname(__file__), '..', 'backend')
-    sys.path.insert(0, backend_path)
-    
-    # Import the Flask app
-    from app.app import app
-    
-    print("Successfully imported Flask app")
-    
-except Exception as e:
-    print(f"Error importing Flask app: {e}")
-    print(f"Traceback: {traceback.format_exc()}")
-    
-    # Create a minimal error app
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-    
-    @app.route('/<path:path>')
-    def error_handler(path):
-        return jsonify({
-            'error': 'Failed to load application',
-            'details': str(e),
-            'path': path
-        }), 500
+# Create a simple Flask app for testing
+app = Flask(__name__)
 
-# For Vercel serverless deployment
+@app.route('/api/test', methods=['GET'])
+def test():
+    return jsonify({
+        'message': 'API is working!',
+        'status': 'success'
+    })
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({
+        'status': 'healthy',
+        'message': 'Basic API is running'
+    })
+
+@app.route('/<path:path>')
+def catch_all(path):
+    return jsonify({
+        'error': 'Endpoint not found',
+        'path': path
+    }), 404
+
 if __name__ == '__main__':
     app.run()
