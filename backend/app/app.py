@@ -17,17 +17,6 @@ from functools import wraps
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
-# Middleware to ensure database is initialized in serverless environment
-@app.before_request
-def ensure_db_initialized():
-    if hasattr(app, 'init_db') and not hasattr(app, '_db_initialized'):
-        try:
-            app.init_db()
-            app._db_initialized = True
-        except Exception as e:
-            # Log error but don't fail the request
-            print(f"Database initialization error: {e}")
-
 app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
 
 # Database configuration - use environment variable or default to SQLite
@@ -177,6 +166,14 @@ def health_check():
             'message': 'Campus Climb API is running but database has issues',
             'error': str(e)
         }), 500
+
+@app.route('/api/test', methods=['GET'])
+def test_endpoint():
+    """Simple test endpoint to verify the API is working"""
+    return jsonify({
+        'message': 'API is working!',
+        'timestamp': datetime.utcnow().isoformat()
+    })
 
 @app.route('/api/opportunities', methods=['GET'])
     """Get all opportunities with optional filtering"""
@@ -507,6 +504,17 @@ def init_db():
 
 # Store the initialization function
 app.init_db = init_db
+
+# Middleware to ensure database is initialized in serverless environment
+@app.before_request
+def ensure_db_initialized():
+    if hasattr(app, 'init_db') and not hasattr(app, '_db_initialized'):
+        try:
+            app.init_db()
+            app._db_initialized = True
+        except Exception as e:
+            # Log error but don't fail the request
+            print(f"Database initialization error: {e}")
 
 # For Vercel deployment
 if __name__ == '__main__':
