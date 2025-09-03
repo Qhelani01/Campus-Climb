@@ -17,8 +17,29 @@ from functools import wraps
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
+# Middleware to ensure database is initialized in serverless environment
+@app.before_request
+def ensure_db_initialized():
+    if hasattr(app, 'init_db') and not hasattr(app, '_db_initialized'):
+        try:
+            app.init_db()
+            app._db_initialized = True
+        except Exception as e:
+            # Log error but don't fail the request
+            print(f"Database initialization error: {e}")
+
 app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///campus_climb.db'
+
+# Database configuration - use environment variable or default to SQLite
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///campus_climb.db')
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+# For Vercel serverless, use in-memory SQLite if no DATABASE_URL is set
+if os.environ.get('VERCEL') and not os.environ.get('DATABASE_URL'):
+    database_url = 'sqlite:///:memory:'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -139,8 +160,25 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'Campus Climb API is running'})
 
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for deployment platforms"""
+    try:
+        # Test database connection
+        db.session.execute('SELECT 1')
+        return jsonify({
+            'status': 'healthy', 
+            'message': 'Campus Climb API is running',
+            'database': 'connected'
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'degraded',
+            'message': 'Campus Climb API is running but database has issues',
+            'error': str(e)
+        }), 500
+
 @app.route('/api/opportunities', methods=['GET'])
-def get_opportunities():
     """Get all opportunities with optional filtering"""
     # Query parameters for filtering
     type_filter = request.args.get('type', '')
@@ -459,10 +497,16 @@ def admin_export_csv():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Create database tables and load initial data
-with app.app_context():
-    db.create_all()
-    load_opportunities_from_csv()
+# Initialize database on first request for serverless environments
+def init_db():
+    with app.app_context():
+        db.create_all()
+        # Only load CSV data if database is empty
+        if Opportunity.query.count() == 0:
+            load_opportunities_from_csv()
+
+# Store the initialization function
+app.init_db = init_db
 
 # For Vercel deployment
 if __name__ == '__main__':
