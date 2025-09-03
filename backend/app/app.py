@@ -176,6 +176,7 @@ def test_endpoint():
     })
 
 @app.route('/api/opportunities', methods=['GET'])
+def get_opportunities():
     """Get all opportunities with optional filtering"""
     # Query parameters for filtering
     type_filter = request.args.get('type', '')
