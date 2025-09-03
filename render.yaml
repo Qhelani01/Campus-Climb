@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: campus-climb-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn --chdir backend wsgi:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
