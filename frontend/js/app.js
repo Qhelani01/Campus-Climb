@@ -1,7 +1,7 @@
 // Campus Climb Frontend JavaScript
 class CampusClimbApp {
     constructor() {
-        this.apiBaseUrl = 'http://localhost:8000/api';
+        this.apiBaseUrl = window.APP_CONFIG ? window.APP_CONFIG.apiBaseUrl : 'http://localhost:8000/api';
         this.currentUser = null;
         this.opportunities = [];
         this.initialized = false;

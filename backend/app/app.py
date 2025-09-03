@@ -464,5 +464,6 @@ with app.app_context():
     db.create_all()
     load_opportunities_from_csv()
 
+# For Vercel deployment
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)

@@ -1,7 +1,7 @@
 // Campus Climb Admin Panel JavaScript
 class AdminPanel {
     constructor() {
-        this.apiBaseUrl = 'http://localhost:8000/api';
+        this.apiBaseUrl = window.APP_CONFIG ? window.APP_CONFIG.apiBaseUrl : 'http://localhost:8000/api';
         this.isAuthenticated = false;
         this.currentSection = 'dashboard';
         this.init();
