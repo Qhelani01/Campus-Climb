@@ -398,6 +398,7 @@ class CampusClimbApp {
                 localStorage.setItem('userEmail', email);
                 this.hideLoginModal();
                 this.showDashboard();
+                this.setupPeriodicRefresh(); // Start periodic refresh
                 this.showMessage('Login successful! Welcome back.', 'success');
             } else {
                 console.log('Login failed:', data.error);
@@ -468,6 +469,11 @@ class CampusClimbApp {
         if (welcomeSection) welcomeSection.classList.add('hidden');
         if (opportunitiesSection) opportunitiesSection.classList.add('hidden');
         if (dashboardSection) dashboardSection.classList.remove('hidden');
+        
+        // Setup periodic refresh for logged-in users
+        if (this.currentUser) {
+            this.setupPeriodicRefresh();
+        }
         
         console.log('Sections updated');
         
