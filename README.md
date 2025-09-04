@@ -32,22 +32,19 @@ A modern web application for managing and displaying career opportunities, inter
 
 ```
 Campus Climb/
-├── backend/                 # Flask API backend
-│   ├── app/
-│   │   └── app.py         # Main Flask API application
-│   ├── data/
-│   │   └── opportunities.csv # Sample opportunities data
-│   ├── campus_climb.db    # SQLite database
-│   ├── requirements.txt    # Python dependencies
-│   └── README.md          # Backend documentation
+├── api/                    # Flask API (Vercel serverless)
+│   └── index.py          # Main Flask API application
+├── backend/                # Data storage
+│   └── data/
+│       └── opportunities.csv # Opportunities data
 ├── frontend/               # Frontend application
 │   ├── index.html         # Main HTML file
-│   ├── js/
-│   │   └── app.js        # Main JavaScript application
-│   ├── templates/        # Legacy templates (not used)
-│   ├── static/           # Static assets
-│   └── README.md         # Frontend documentation
-├── run.py                 # Backend startup script
+│   ├── Campus Climb LOGO.png # Logo
+│   └── js/
+│       ├── app.js         # Main JavaScript application
+│       └── config.js      # Configuration
+├── requirements.txt        # Python dependencies
+├── vercel.json            # Vercel deployment config
 ├── README.md              # This file
 └── .gitignore            # Git ignore rules
 ```
@@ -67,24 +64,23 @@ Campus Climb/
    cd Campus Climb
    ```
 
-2. **Install backend dependencies**
+2. **Install dependencies**
    ```bash
-   python3 -m pip install -r backend/requirements.txt
+   python3 -m pip install -r requirements.txt
    ```
 
-3. **Start the backend server**
+3. **Deploy to Vercel**
    ```bash
-   python3 run.py
+   # The app is automatically deployed to Vercel
+   # Visit: https://campus-climb.vercel.app
    ```
 
-4. **Access the frontend**
-   - Open `frontend/index.html` in your web browser
-   - Or serve with a local server:
-     ```bash
-     cd frontend
-     python3 -m http.server 3000
-     ```
-   - Then visit: `http://localhost:3000`
+4. **Local development**
+   ```bash
+   # For local testing, you can run:
+   cd api
+   python3 index.py
+   ```
 
 5. **Register and login**
    - Use a WVSU email address (@wvstateu.edu)
@@ -94,7 +90,7 @@ Campus Climb/
 
 ### Adding Opportunities
 1. Edit `backend/data/opportunities.csv` with new opportunities
-2. Restart the backend or call `/api/admin/load-csv` to reload data
+2. Commit and push to GitHub to trigger Vercel redeploy
 
 ### CSV Format
 ```csv
@@ -121,8 +117,7 @@ title,company,location,type,category,description,requirements,salary,deadline,ap
 - `POST /api/auth/login` - User login
 - `GET /api/auth/profile` - Get user profile
 
-### Admin
-- `POST /api/admin/load-csv` - Reload data from CSV file
+### Health
 - `GET /api/health` - Health check endpoint
 
 ## 🎯 Learning Objectives
@@ -130,8 +125,9 @@ title,company,location,type,category,description,requirements,salary,deadline,ap
 This project demonstrates:
 - **Full-Stack Development**: Separate frontend and backend architecture
 - **API Design**: RESTful API endpoints with proper HTTP methods
-- **Database Design**: SQLAlchemy ORM and database relationships
+- **Database Design**: Supabase PostgreSQL with SQLAlchemy ORM
 - **Authentication**: User registration, login, and session management
+- **Deployment**: Vercel serverless functions
 - **Frontend Development**: Modern JavaScript with async/await
 - **Data Processing**: CSV import/export functionality
 - **Responsive Design**: Mobile-first web design
@@ -139,26 +135,21 @@ This project demonstrates:
 
 ## 🔧 Development
 
-### Running the Backend
+### Local Development
 ```bash
-python3 run.py
+# Run the API locally
+cd api
+python3 index.py
 ```
-Backend will be available at: `http://localhost:8000`
-
-### Running the Frontend
-```bash
-cd frontend
-python3 -m http.server 3000
-```
-Frontend will be available at: `http://localhost:3000`
+API will be available at: `http://localhost:5000`
 
 ### Database
-- SQLite database file: `backend/campus_climb.db`
-- Automatically created on first run
+- Supabase PostgreSQL database
+- Environment variables: `DATABASE_URL` and `SECRET_KEY`
 - Data loaded from CSV file
 
 ### Adding New Features
-1. **Backend**: Add routes in `backend/app/app.py`
+1. **Backend**: Add routes in `api/index.py`
 2. **Frontend**: Update `frontend/js/app.js` and `frontend/index.html`
 3. **Data**: Update CSV data as needed
 
