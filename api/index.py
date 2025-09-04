@@ -527,6 +527,8 @@ def admin_update_opportunity(id):
             opportunity.salary = data['salary']
         if data.get('application_url'):
             opportunity.application_url = data['application_url']
+        if 'is_deleted' in data:
+            opportunity.is_deleted = bool(data['is_deleted'])
         
         db.session.commit()
         return jsonify({
