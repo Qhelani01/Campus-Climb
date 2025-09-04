@@ -181,8 +181,10 @@ def health():
 @app.route('/api/opportunities', methods=['GET'])
 def opportunities():
     try:
-        # Read from database
-        query = Opportunity.query.filter_by(is_deleted=False)
+        # Read from database - include opportunities where is_deleted is False or null
+        query = Opportunity.query.filter(
+            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+        )
         
         # Filters
         type_filter = request.args.get('type', '').strip()
@@ -209,7 +211,10 @@ def opportunities():
 def get_opportunity(id):
     """Get a specific opportunity by ID"""
     try:
-        opportunity = Opportunity.query.filter_by(id=id, is_deleted=False).first()
+        opportunity = Opportunity.query.filter(
+            Opportunity.id == id,
+            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+        ).first()
         if not opportunity:
             return jsonify({'error': 'Opportunity not found'}), 404
         return jsonify(opportunity.to_dict())
@@ -220,7 +225,9 @@ def get_opportunity(id):
 def get_opportunity_types():
     """Get all unique opportunity types"""
     try:
-        types = db.session.query(Opportunity.type).filter_by(is_deleted=False).distinct().all()
+        types = db.session.query(Opportunity.type).filter(
+            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+        ).distinct().all()
         return jsonify([t[0] for t in types])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -229,7 +236,9 @@ def get_opportunity_types():
 def get_opportunity_categories():
     """Get all unique opportunity categories"""
     try:
-        categories = db.session.query(Opportunity.category).filter_by(is_deleted=False).distinct().all()
+        categories = db.session.query(Opportunity.category).filter(
+            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+        ).distinct().all()
         return jsonify([c[0] for c in categories])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
