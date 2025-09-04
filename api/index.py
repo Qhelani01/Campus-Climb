@@ -157,6 +157,20 @@ def init_db():
 # Store the initialization function
 app.init_db = init_db
 
+# Ensure database is initialized on every request in serverless environment
+@app.before_request
+def ensure_db_initialized():
+    if os.environ.get('VERCEL'):
+        try:
+            # Always create tables in serverless environment
+            with app.app_context():
+                db.create_all()
+                # Load CSV data if database is empty
+                if Opportunity.query.count() == 0:
+                    load_opportunities_from_csv()
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+
 @app.route('/api/test', methods=['GET'])
 def test():
     return jsonify({
@@ -350,6 +364,10 @@ def login():
 def admin_create_opportunity():
     """Create a new opportunity (admin only)"""
     try:
+        # Ensure database is initialized
+        with app.app_context():
+            db.create_all()
+        
         data = request.get_json()
         
         if not data:
@@ -425,6 +443,10 @@ def admin_update_opportunity(opp_id):
 def admin_delete_opportunity(opp_id):
     """Delete an opportunity (admin only)"""
     try:
+        # Ensure database is initialized
+        with app.app_context():
+            db.create_all()
+        
         opportunity = Opportunity.query.get(opp_id)
         if not opportunity:
             return jsonify({'error': 'Opportunity not found'}), 404
@@ -482,6 +504,10 @@ def admin_export_csv():
 def admin_dashboard():
     """Get admin dashboard data"""
     try:
+        # Ensure database is initialized
+        with app.app_context():
+            db.create_all()
+        
         # Get basic stats
         total_users = User.query.count()
         total_opportunities = Opportunity.query.count()
