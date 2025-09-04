@@ -17,7 +17,7 @@
     },
     {
       "src": "/admin",
-      "dest": "/frontend/admin.html"
+      "dest": "/frontend/index.html"
     },
     {
       "src": "/(.*)",
