@@ -4,7 +4,6 @@ from flask_session import Session
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
-import csv
 import json
 from datetime import datetime
 from functools import wraps
@@ -112,121 +111,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def get_csv_path():
-    """Get the path to the CSV file"""
-    return os.path.join(os.path.dirname(__file__), '..', 'backend', 'data', 'opportunities.csv')
-
-def read_opportunities_from_csv():
-    """Read all opportunities from CSV and return as list of dicts.
-    This bypasses the database and is the source of truth for the frontend.
-    """
-    opportunities = []
-    csv_path = get_csv_path()
-    if not os.path.exists(csv_path):
-        return opportunities
-    try:
-        with open(csv_path, 'r', encoding='utf-8') as file:
-            reader = csv.DictReader(file)
-            for idx, row in enumerate(reader, start=1):
-                # Normalize fields and provide fallbacks
-                opp = {
-                    'id': idx,
-                    'title': row.get('title', '').strip(),
-                    'company': row.get('company', '').strip(),
-                    'location': row.get('location', '').strip(),
-                    'type': row.get('type', '').strip(),
-                    'category': row.get('category', '').strip(),
-                    'description': row.get('description', '').strip(),
-                    'requirements': row.get('requirements', '') or '',
-                    'salary': row.get('salary', '') or '',
-                    'deadline': row.get('deadline', '') or None,
-                    'application_url': row.get('application_url', '') or '',
-                    'created_at': row.get('created_at', '') or None,
-                }
-                # Skip rows explicitly marked deleted
-                if row.get('is_deleted', '').strip().lower() == 'true':
-                    continue
-                opportunities.append(opp)
-    except Exception as e:
-        print(f"Error reading CSV: {e}")
-    return opportunities
-
-def load_opportunities_from_csv():
-    """Load opportunities from CSV file"""
-    try:
-        csv_path = get_csv_path()
-        
-        if os.path.exists(csv_path):
-            with open(csv_path, 'r', encoding='utf-8') as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    # Skip if this opportunity was marked as deleted
-                    if row.get('is_deleted', '').lower() == 'true':
-                        continue
-                    
-                    # Check if opportunity already exists (to avoid duplicates)
-                    existing = Opportunity.query.filter_by(title=row.get('title', '')).first()
-                    if existing:
-                        continue
-                    
-                    opportunity = Opportunity(
-                        title=row.get('title', ''),
-                        company=row.get('company', ''),
-                        location=row.get('location', ''),
-                        type=row.get('type', ''),
-                        category=row.get('category', ''),
-                        description=row.get('description', ''),
-                        requirements=row.get('requirements', ''),
-                        salary=row.get('salary', ''),
-                        application_url=row.get('application_url', ''),
-                        is_deleted=False
-                    )
-                    db.session.add(opportunity)
-            db.session.commit()
-    except Exception as e:
-        print(f"Error loading CSV: {e}")
-
-def save_opportunities_to_csv():
-    """Save all opportunities back to CSV file"""
-    try:
-        csv_path = get_csv_path()
-        # Include opportunities where is_deleted is False or null
-        opportunities = Opportunity.query.filter(
-            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
-        ).all()
-        
-        with open(csv_path, 'w', newline='', encoding='utf-8') as file:
-            fieldnames = ['title', 'company', 'location', 'type', 'category', 'description', 'requirements', 'salary', 'deadline', 'application_url', 'is_deleted']
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for opp in opportunities:
-                writer.writerow({
-                    'title': opp.title,
-                    'company': opp.company,
-                    'location': opp.location,
-                    'type': opp.type,
-                    'category': opp.category,
-                    'description': opp.description,
-                    'requirements': opp.requirements or '',
-                    'salary': opp.salary or '',
-                    'deadline': opp.deadline.isoformat() if opp.deadline else '',
-                    'application_url': opp.application_url or '',
-                    'is_deleted': 'false'
-                })
-    except Exception as e:
-        print(f"Error saving CSV: {e}")
-
-
-
-def add_opportunity_to_csv(opportunity_data):
-    """Add a new opportunity to the CSV file"""
-    try:
-        # In serverless environment, we can't write to files
-        # So we'll use a different approach - store in database
-        print(f"Added opportunity '{opportunity_data['title']}' to database")
-    except Exception as e:
-        print(f"Error adding opportunity to CSV: {e}")
+# CSV functions removed - using Supabase as primary database
 
 def clean_test_opportunities():
     """Remove any test/dummy opportunities"""
@@ -250,8 +135,6 @@ def clean_test_opportunities():
 def init_db():
     with app.app_context():
         db.create_all()
-        # Load from CSV only - no test data
-        load_opportunities_from_csv()
         # Clean up any test opportunities
         clean_test_opportunities()
 
@@ -266,10 +149,7 @@ def ensure_db_initialized():
             # Always create tables in serverless environment
             with app.app_context():
                 db.create_all()
-                # Load CSV data if database is empty
-                if Opportunity.query.count() == 0:
-                    load_opportunities_from_csv()
-                    print(f"Loaded {Opportunity.query.count()} opportunities from CSV")
+                print(f"Database initialized with {Opportunity.query.count()} opportunities")
         except Exception as e:
             print(f"Database initialization error: {e}")
 
@@ -556,34 +436,7 @@ def admin_delete_opportunity(id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/sync/csv-to-db', methods=['POST'])
-def sync_csv_to_database():
-    """Sync opportunities from CSV to database"""
-    try:
-        # Clear existing opportunities
-        Opportunity.query.delete()
-        db.session.commit()
-        
-        # Load from CSV
-        load_opportunities_from_csv()
-        
-        return jsonify({
-            'message': 'CSV data synced to database successfully',
-            'count': Opportunity.query.filter_by(is_deleted=False).count()
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/admin/sync/db-to-csv', methods=['POST'])
-def sync_database_to_csv():
-    """Sync opportunities from database to CSV"""
-    try:
-        save_opportunities_to_csv()
-        return jsonify({
-            'message': 'Database data synced to CSV successfully'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# CSV sync endpoints removed - using Supabase as primary database
 
 # Additional admin endpoints
 @app.route('/api/admin/users', methods=['GET'])
