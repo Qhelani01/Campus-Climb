@@ -83,7 +83,7 @@ class Opportunity(db.Model):
             'salary': self.salary,
             'deadline': self.deadline.isoformat() if self.deadline else None,
             'application_url': self.application_url,
-            'created_at': self.created_at.isoformat()
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 # Helper Functions
