@@ -155,7 +155,6 @@ def load_opportunities_from_csv():
     """Load opportunities from CSV file"""
     try:
         csv_path = get_csv_path()
-        deleted_opportunities = get_deleted_opportunities()
         
         if os.path.exists(csv_path):
             with open(csv_path, 'r', encoding='utf-8') as file:
@@ -163,10 +162,6 @@ def load_opportunities_from_csv():
                 for row in reader:
                     # Skip if this opportunity was marked as deleted
                     if row.get('is_deleted', '').lower() == 'true':
-                        continue
-                    
-                    # Skip if this opportunity is in the deleted list
-                    if row.get('title', '') in deleted_opportunities:
                         continue
                     
                     # Check if opportunity already exists (to avoid duplicates)
@@ -219,32 +214,7 @@ def save_opportunities_to_csv():
     except Exception as e:
         print(f"Error saving CSV: {e}")
 
-def get_deleted_opportunities():
-    """Get list of deleted opportunities from JSON file"""
-    try:
-        deleted_path = os.path.join(os.path.dirname(__file__), '..', 'backend', 'data', 'deleted_opportunities.json')
-        if os.path.exists(deleted_path):
-            with open(deleted_path, 'r', encoding='utf-8') as file:
-                data = json.load(file)
-                return data.get('deleted_opportunities', [])
-        return []
-    except Exception as e:
-        print(f"Error reading deleted opportunities: {e}")
-        return []
 
-def mark_opportunity_deleted_in_csv(opportunity_title):
-    """Mark an opportunity as deleted"""
-    try:
-        # Add to deleted opportunities list
-        deleted_list = get_deleted_opportunities()
-        if opportunity_title not in deleted_list:
-            deleted_list.append(opportunity_title)
-        
-        # In a real implementation, this would update the JSON file
-        # For now, we'll rely on the database is_deleted flag
-        print(f"Marked opportunity '{opportunity_title}' as deleted")
-    except Exception as e:
-        print(f"Error marking opportunity as deleted: {e}")
 
 def add_opportunity_to_csv(opportunity_data):
     """Add a new opportunity to the CSV file"""
