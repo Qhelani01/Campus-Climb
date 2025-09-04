@@ -62,6 +62,7 @@ class Opportunity(db.Model):
     deadline = db.Column(db.Date)
     application_url = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, default=False)  # New field to track deleted items
     
     def to_dict(self):
         return {
@@ -105,14 +106,22 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def get_csv_path():
+    """Get the path to the CSV file"""
+    return os.path.join(os.path.dirname(__file__), '..', 'backend', 'data', 'opportunities.csv')
+
 def load_opportunities_from_csv():
     """Load opportunities from CSV file"""
     try:
-        csv_path = os.path.join(os.path.dirname(__file__), '..', 'backend', 'data', 'opportunities.csv')
+        csv_path = get_csv_path()
         if os.path.exists(csv_path):
             with open(csv_path, 'r', encoding='utf-8') as file:
                 reader = csv.DictReader(file)
                 for row in reader:
+                    # Skip if this opportunity was marked as deleted
+                    if row.get('is_deleted', '').lower() == 'true':
+                        continue
+                    
                     opportunity = Opportunity(
                         title=row.get('title', ''),
                         company=row.get('company', ''),
@@ -122,12 +131,88 @@ def load_opportunities_from_csv():
                         description=row.get('description', ''),
                         requirements=row.get('requirements', ''),
                         salary=row.get('salary', ''),
-                        application_url=row.get('application_url', '')
+                        application_url=row.get('application_url', ''),
+                        is_deleted=False
                     )
                     db.session.add(opportunity)
             db.session.commit()
     except Exception as e:
         print(f"Error loading CSV: {e}")
+
+def save_opportunities_to_csv():
+    """Save all opportunities back to CSV file"""
+    try:
+        csv_path = get_csv_path()
+        opportunities = Opportunity.query.filter_by(is_deleted=False).all()
+        
+        with open(csv_path, 'w', newline='', encoding='utf-8') as file:
+            fieldnames = ['title', 'company', 'location', 'type', 'category', 'description', 'requirements', 'salary', 'deadline', 'application_url', 'is_deleted']
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for opp in opportunities:
+                writer.writerow({
+                    'title': opp.title,
+                    'company': opp.company,
+                    'location': opp.location,
+                    'type': opp.type,
+                    'category': opp.category,
+                    'description': opp.description,
+                    'requirements': opp.requirements or '',
+                    'salary': opp.salary or '',
+                    'deadline': opp.deadline.isoformat() if opp.deadline else '',
+                    'application_url': opp.application_url or '',
+                    'is_deleted': 'false'
+                })
+    except Exception as e:
+        print(f"Error saving CSV: {e}")
+
+def mark_opportunity_deleted_in_csv(opportunity_title):
+    """Mark an opportunity as deleted in the CSV file"""
+    try:
+        csv_path = get_csv_path()
+        temp_path = csv_path + '.tmp'
+        
+        with open(csv_path, 'r', encoding='utf-8') as infile, open(temp_path, 'w', newline='', encoding='utf-8') as outfile:
+            reader = csv.DictReader(infile)
+            fieldnames = reader.fieldnames + ['is_deleted'] if 'is_deleted' not in reader.fieldnames else reader.fieldnames
+            writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for row in reader:
+                if row.get('title') == opportunity_title:
+                    row['is_deleted'] = 'true'
+                writer.writerow(row)
+        
+        # Replace original file with updated file
+        os.replace(temp_path, csv_path)
+    except Exception as e:
+        print(f"Error marking opportunity as deleted: {e}")
+
+def add_opportunity_to_csv(opportunity_data):
+    """Add a new opportunity to the CSV file"""
+    try:
+        csv_path = get_csv_path()
+        
+        with open(csv_path, 'a', newline='', encoding='utf-8') as file:
+            fieldnames = ['title', 'company', 'location', 'type', 'category', 'description', 'requirements', 'salary', 'deadline', 'application_url', 'is_deleted']
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            
+            writer.writerow({
+                'title': opportunity_data['title'],
+                'company': opportunity_data['company'],
+                'location': opportunity_data['location'],
+                'type': opportunity_data['type'],
+                'category': opportunity_data['category'],
+                'description': opportunity_data['description'],
+                'requirements': opportunity_data.get('requirements', ''),
+                'salary': opportunity_data.get('salary', ''),
+                'deadline': opportunity_data.get('deadline', ''),
+                'application_url': opportunity_data.get('application_url', ''),
+                'is_deleted': 'false'
+            })
+    except Exception as e:
+        print(f"Error adding opportunity to CSV: {e}")
 
 # Initialize database
 def init_db():
@@ -209,7 +294,7 @@ def opportunities():
         category_filter = request.args.get('category', '')
         search_query = request.args.get('search', '')
         
-        query = Opportunity.query
+        query = Opportunity.query.filter_by(is_deleted=False)
         
         if type_filter:
             query = query.filter(Opportunity.type == type_filter)
@@ -231,7 +316,7 @@ def opportunities():
 def get_opportunity(id):
     """Get a specific opportunity by ID"""
     try:
-        opportunity = Opportunity.query.get(id)
+        opportunity = Opportunity.query.filter_by(id=id, is_deleted=False).first()
         if not opportunity:
             return jsonify({'error': 'Opportunity not found'}), 404
         return jsonify(opportunity.to_dict())
@@ -242,7 +327,7 @@ def get_opportunity(id):
 def get_opportunity_types():
     """Get all unique opportunity types"""
     try:
-        types = db.session.query(Opportunity.type).distinct().all()
+        types = db.session.query(Opportunity.type).filter_by(is_deleted=False).distinct().all()
         return jsonify([t[0] for t in types])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -251,7 +336,7 @@ def get_opportunity_types():
 def get_opportunity_categories():
     """Get all unique opportunity categories"""
     try:
-        categories = db.session.query(Opportunity.category).distinct().all()
+        categories = db.session.query(Opportunity.category).filter_by(is_deleted=False).distinct().all()
         return jsonify([c[0] for c in categories])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -387,11 +472,15 @@ def admin_create_opportunity():
             description=data['description'],
             requirements=data.get('requirements', ''),
             salary=data.get('salary', ''),
-            application_url=data.get('application_url', '')
+            application_url=data.get('application_url', ''),
+            is_deleted=False
         )
         
         db.session.add(new_opportunity)
         db.session.commit()
+        
+        # Add to CSV file
+        add_opportunity_to_csv(data)
         
         return jsonify({
             'message': 'Opportunity created successfully',
@@ -407,6 +496,10 @@ def admin_create_opportunity():
 def admin_update_opportunity(opp_id):
     """Update an opportunity (admin only)"""
     try:
+        # Ensure database is initialized
+        with app.app_context():
+            db.create_all()
+        
         opportunity = Opportunity.query.get(opp_id)
         if not opportunity:
             return jsonify({'error': 'Opportunity not found'}), 404
@@ -434,6 +527,10 @@ def admin_update_opportunity(opp_id):
             opportunity.application_url = data['application_url']
         
         db.session.commit()
+        
+        # Update CSV file
+        save_opportunities_to_csv()
+        
         return jsonify({'message': 'Opportunity updated successfully', 'opportunity': opportunity.to_dict()})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -451,8 +548,13 @@ def admin_delete_opportunity(opp_id):
         if not opportunity:
             return jsonify({'error': 'Opportunity not found'}), 404
         
-        db.session.delete(opportunity)
+        # Mark as deleted in database
+        opportunity.is_deleted = True
         db.session.commit()
+        
+        # Mark as deleted in CSV file
+        mark_opportunity_deleted_in_csv(opportunity.title)
+        
         return jsonify({'message': 'Opportunity deleted successfully'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -477,7 +579,7 @@ def admin_load_csv():
 def admin_export_csv():
     """Export current opportunities to CSV"""
     try:
-        opportunities = Opportunity.query.all()
+        opportunities = Opportunity.query.filter_by(is_deleted=False).all()
         
         # Create CSV data
         csv_data = []
@@ -510,13 +612,13 @@ def admin_dashboard():
         
         # Get basic stats
         total_users = User.query.count()
-        total_opportunities = Opportunity.query.count()
+        total_opportunities = Opportunity.query.filter_by(is_deleted=False).count()
         
         # Get recent users (last 5)
         recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
         
         # Get recent opportunities (last 5)
-        recent_opportunities = Opportunity.query.order_by(Opportunity.created_at.desc()).limit(5).all()
+        recent_opportunities = Opportunity.query.filter_by(is_deleted=False).order_by(Opportunity.created_at.desc()).limit(5).all()
         
         return jsonify({
             'total_users': total_users,
@@ -532,7 +634,7 @@ def admin_dashboard():
 def admin_get_opportunities():
     """Get all opportunities for admin"""
     try:
-        opportunities = Opportunity.query.order_by(Opportunity.created_at.desc()).all()
+        opportunities = Opportunity.query.filter_by(is_deleted=False).order_by(Opportunity.created_at.desc()).all()
         return jsonify([opp.to_dict() for opp in opportunities])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
