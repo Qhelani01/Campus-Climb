@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_session import Session
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -11,18 +12,22 @@ from functools import wraps
 app = Flask(__name__)
 CORS(app)
 
-# Database configuration
-database_url = os.environ.get('DATABASE_URL', 'sqlite:///campus_climb.db')
-if database_url.startswith('postgres://'):
-    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+# Session configuration
+app.config['SESSION_TYPE'] = 'filesystem'
+Session(app)
 
-# For Vercel serverless, use in-memory SQLite if no DATABASE_URL is set
-if os.environ.get('VERCEL') and not os.environ.get('DATABASE_URL'):
-    database_url = 'sqlite:///:memory:'
+# Database configuration
+# Force persistent database - no more in-memory SQLite
+database_url = os.environ.get('DATABASE_URL')
+if not database_url:
+    # Fallback to a persistent SQLite file
+    database_url = 'sqlite:///campus_climb.db'
+elif database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
 
 db = SQLAlchemy(app)
 
@@ -411,7 +416,16 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        return jsonify({'message': 'Registration successful', 'user': user.to_dict()}), 201
+        # Create session
+        from flask import session
+        session['user_id'] = user.id
+        session['email'] = user.email
+        
+        return jsonify({
+            'message': 'Registration successful', 
+            'user': user.to_dict(),
+            'session_id': session.sid if hasattr(session, 'sid') else None
+        }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -435,7 +449,43 @@ def login():
         if not user or not user.check_password(password):
             return jsonify({'error': 'Invalid credentials'}), 401
 
-        return jsonify({'message': 'Login successful', 'user': user.to_dict()})
+        # Create session
+        from flask import session
+        session['user_id'] = user.id
+        session['email'] = user.email
+        
+        return jsonify({
+            'message': 'Login successful', 
+            'user': user.to_dict(),
+            'session_id': session.sid if hasattr(session, 'sid') else None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    """Logout user and clear session"""
+    try:
+        from flask import session
+        session.clear()
+        return jsonify({'message': 'Logout successful'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/me', methods=['GET'])
+def get_current_user():
+    """Get current logged in user from session"""
+    try:
+        from flask import session
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify({'user': user.to_dict()})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
