@@ -384,13 +384,60 @@ def get_opportunity_categories():
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
-    # Feature disabled
-    return jsonify({'error': 'Registration is disabled'}), 410
+    """Register a new user. Only WVSU emails (@wvstateu.edu) are allowed."""
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password') or ''
+        first_name = (data.get('first_name') or '').strip()
+        last_name = (data.get('last_name') or '').strip()
+
+        # Validate
+        if not all([email, password, first_name, last_name]):
+            return jsonify({'error': 'All fields are required'}), 400
+        if not is_wvsu_email(email):
+            return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
+
+        # Ensure tables exist
+        with app.app_context():
+            db.create_all()
+
+        # Uniqueness
+        if User.query.filter_by(email=email).first():
+            return jsonify({'error': 'Email already registered'}), 409
+
+        user = User(email=email, first_name=first_name, last_name=last_name)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        return jsonify({'message': 'Registration successful', 'user': user.to_dict()}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    # Feature disabled
-    return jsonify({'error': 'Login is disabled'}), 410
+    """Authenticate existing user. Only WVSU emails allowed. No mock users."""
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password') or ''
+
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+        if not is_wvsu_email(email):
+            return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
+
+        with app.app_context():
+            db.create_all()
+
+        user = User.query.filter_by(email=email).first()
+        if not user or not user.check_password(password):
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        return jsonify({'message': 'Login successful', 'user': user.to_dict()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Admin endpoints
 @app.route('/api/admin/opportunities', methods=['POST'])
