@@ -190,7 +190,10 @@ def save_opportunities_to_csv():
     """Save all opportunities back to CSV file"""
     try:
         csv_path = get_csv_path()
-        opportunities = Opportunity.query.filter_by(is_deleted=False).all()
+        # Include opportunities where is_deleted is False or null
+        opportunities = Opportunity.query.filter(
+            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+        ).all()
         
         with open(csv_path, 'w', newline='', encoding='utf-8') as file:
             fieldnames = ['title', 'company', 'location', 'type', 'category', 'description', 'requirements', 'salary', 'deadline', 'application_url', 'is_deleted']
