@@ -266,6 +266,7 @@ def ensure_db_initialized():
                 # Load CSV data if database is empty
                 if Opportunity.query.count() == 0:
                     load_opportunities_from_csv()
+                    print(f"Loaded {Opportunity.query.count()} opportunities from CSV")
         except Exception as e:
             print(f"Database initialization error: {e}")
 
@@ -297,31 +298,27 @@ def health():
 @app.route('/api/opportunities', methods=['GET'])
 def opportunities():
     try:
-        # Read directly from CSV
-        all_opps = read_opportunities_from_csv()
-
+        # Read from database
+        query = Opportunity.query.filter_by(is_deleted=False)
+        
         # Filters
-        type_filter = (request.args.get('type') or '').strip().lower()
-        category_filter = (request.args.get('category') or '').strip().lower()
-        search_query = (request.args.get('search') or '').strip().lower()
-
-        def matches_filters(opp):
-            if type_filter and (opp.get('type', '').lower() != type_filter):
-                return False
-            if category_filter and (opp.get('category', '').lower() != category_filter):
-                return False
-            if search_query:
-                haystack = f"{opp.get('title','')} {opp.get('company','')} {opp.get('description','')}".lower()
-                if search_query not in haystack:
-                    return False
-            return True
-
-        filtered = [o for o in all_opps if matches_filters(o)]
-        # Most recent first if created_at exists; otherwise keep CSV order
-        def sort_key(o):
-            return o.get('created_at') or ''
-        filtered.sort(key=sort_key, reverse=True)
-        return jsonify(filtered)
+        type_filter = request.args.get('type', '').strip()
+        category_filter = request.args.get('category', '').strip()
+        search_query = request.args.get('search', '').strip()
+        
+        if type_filter:
+            query = query.filter(Opportunity.type == type_filter)
+        if category_filter:
+            query = query.filter(Opportunity.category == category_filter)
+        if search_query:
+            query = query.filter(
+                Opportunity.title.contains(search_query) |
+                Opportunity.company.contains(search_query) |
+                Opportunity.description.contains(search_query)
+            )
+        
+        opportunities = query.order_by(Opportunity.created_at.desc()).all()
+        return jsonify([opp.to_dict() for opp in opportunities])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -329,11 +326,10 @@ def opportunities():
 def get_opportunity(id):
     """Get a specific opportunity by ID"""
     try:
-        all_opps = read_opportunities_from_csv()
-        # IDs are 1-based from CSV row order
-        if 1 <= id <= len(all_opps):
-            return jsonify(all_opps[id - 1])
-        return jsonify({'error': 'Opportunity not found'}), 404
+        opportunity = Opportunity.query.filter_by(id=id, is_deleted=False).first()
+        if not opportunity:
+            return jsonify({'error': 'Opportunity not found'}), 404
+        return jsonify(opportunity.to_dict())
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -341,9 +337,8 @@ def get_opportunity(id):
 def get_opportunity_types():
     """Get all unique opportunity types"""
     try:
-        all_opps = read_opportunities_from_csv()
-        types = sorted({(o.get('type') or '').strip() for o in all_opps if o.get('type')})
-        return jsonify(types)
+        types = db.session.query(Opportunity.type).filter_by(is_deleted=False).distinct().all()
+        return jsonify([t[0] for t in types])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -351,9 +346,8 @@ def get_opportunity_types():
 def get_opportunity_categories():
     """Get all unique opportunity categories"""
     try:
-        all_opps = read_opportunities_from_csv()
-        categories = sorted({(o.get('category') or '').strip() for o in all_opps if o.get('category')})
-        return jsonify(categories)
+        categories = db.session.query(Opportunity.category).filter_by(is_deleted=False).distinct().all()
+        return jsonify([c[0] for c in categories])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -459,46 +453,161 @@ def get_current_user():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Admin endpoints
+# Admin endpoints for opportunity management
+@app.route('/api/admin/opportunities', methods=['GET'])
+def admin_get_opportunities():
+    """Get all opportunities for admin (including deleted)"""
+    try:
+        opportunities = Opportunity.query.order_by(Opportunity.created_at.desc()).all()
+        return jsonify([opp.to_dict() for opp in opportunities])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/admin/opportunities', methods=['POST'])
-@admin_required
 def admin_create_opportunity():
-    return jsonify({'error': 'Admin features are disabled'}), 410
+    """Create a new opportunity"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['title', 'company', 'location', 'type', 'category', 'description']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'{field} is required'}), 400
+        
+        new_opportunity = Opportunity(
+            title=data['title'],
+            company=data['company'],
+            location=data['location'],
+            type=data['type'],
+            category=data['category'],
+            description=data['description'],
+            requirements=data.get('requirements', ''),
+            salary=data.get('salary', ''),
+            application_url=data.get('application_url', ''),
+            is_deleted=False
+        )
+        
+        db.session.add(new_opportunity)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Opportunity created successfully',
+            'opportunity': new_opportunity.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/opportunities/<int:opp_id>', methods=['PUT'])
-@admin_required
-def admin_update_opportunity(opp_id):
-    return jsonify({'error': 'Admin features are disabled'}), 410
+@app.route('/api/admin/opportunities/<int:id>', methods=['PUT'])
+def admin_update_opportunity(id):
+    """Update an opportunity"""
+    try:
+        opportunity = Opportunity.query.get(id)
+        if not opportunity:
+            return jsonify({'error': 'Opportunity not found'}), 404
+        
+        data = request.get_json()
+        if data.get('title'):
+            opportunity.title = data['title']
+        if data.get('company'):
+            opportunity.company = data['company']
+        if data.get('location'):
+            opportunity.location = data['location']
+        if data.get('type'):
+            opportunity.type = data['type']
+        if data.get('category'):
+            opportunity.category = data['category']
+        if data.get('description'):
+            opportunity.description = data['description']
+        if data.get('requirements'):
+            opportunity.requirements = data['requirements']
+        if data.get('salary'):
+            opportunity.salary = data['salary']
+        if data.get('application_url'):
+            opportunity.application_url = data['application_url']
+        
+        db.session.commit()
+        return jsonify({
+            'message': 'Opportunity updated successfully',
+            'opportunity': opportunity.to_dict()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/opportunities/<int:opp_id>', methods=['DELETE'])
-@admin_required
-def admin_delete_opportunity(opp_id):
-    return jsonify({'error': 'Admin features are disabled'}), 410
+@app.route('/api/admin/opportunities/<int:id>', methods=['DELETE'])
+def admin_delete_opportunity(id):
+    """Delete an opportunity (soft delete)"""
+    try:
+        opportunity = Opportunity.query.get(id)
+        if not opportunity:
+            return jsonify({'error': 'Opportunity not found'}), 404
+        
+        opportunity.is_deleted = True
+        db.session.commit()
+        
+        return jsonify({'message': 'Opportunity deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/load-csv', methods=['POST'])
-@admin_required
-def admin_load_csv():
-    return jsonify({'error': 'Admin features are disabled'}), 410
+@app.route('/api/admin/sync/csv-to-db', methods=['POST'])
+def sync_csv_to_database():
+    """Sync opportunities from CSV to database"""
+    try:
+        # Clear existing opportunities
+        Opportunity.query.delete()
+        db.session.commit()
+        
+        # Load from CSV
+        load_opportunities_from_csv()
+        
+        return jsonify({
+            'message': 'CSV data synced to database successfully',
+            'count': Opportunity.query.filter_by(is_deleted=False).count()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/export-csv', methods=['GET'])
-@admin_required
-def admin_export_csv():
-    return jsonify({'error': 'Admin features are disabled'}), 410
+@app.route('/api/admin/sync/db-to-csv', methods=['POST'])
+def sync_database_to_csv():
+    """Sync opportunities from database to CSV"""
+    try:
+        save_opportunities_to_csv()
+        return jsonify({
+            'message': 'Database data synced to CSV successfully'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Additional admin endpoints
+@app.route('/api/admin/users', methods=['GET'])
+def admin_get_users():
+    """Get all users for admin"""
+    try:
+        users = User.query.order_by(User.created_at.desc()).all()
+        return jsonify([user.to_dict() for user in users])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/dashboard', methods=['GET'])
-@admin_required
 def admin_dashboard():
-    return jsonify({'error': 'Admin features are disabled'}), 410
-
-@app.route('/api/admin/opportunities', methods=['GET'])
-@admin_required
-def admin_get_opportunities():
-    return jsonify({'error': 'Admin features are disabled'}), 410
-
-@app.route('/api/admin/users', methods=['GET'])
-@admin_required
-def admin_get_users():
-    return jsonify({'error': 'Admin features are disabled'}), 410
+    """Get admin dashboard data"""
+    try:
+        total_users = User.query.count()
+        total_opportunities = Opportunity.query.filter_by(is_deleted=False).count()
+        
+        recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+        recent_opportunities = Opportunity.query.filter_by(is_deleted=False).order_by(Opportunity.created_at.desc()).limit(5).all()
+        
+        return jsonify({
+            'total_users': total_users,
+            'total_opportunities': total_opportunities,
+            'recent_users': [user.to_dict() for user in recent_users],
+            'recent_opportunities': [opp.to_dict() for opp in recent_opportunities]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run()
