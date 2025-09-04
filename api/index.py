@@ -215,30 +215,32 @@ def add_opportunity_to_csv(opportunity_data):
     except Exception as e:
         print(f"Error adding opportunity to CSV: {e}")
 
+def clean_test_opportunities():
+    """Remove any test/dummy opportunities"""
+    try:
+        test_titles = [
+            'Software Engineering Intern',
+            'Test Admin Opportunity',
+            'Test Opportunity'
+        ]
+        
+        for title in test_titles:
+            test_opp = Opportunity.query.filter_by(title=title).first()
+            if test_opp:
+                test_opp.is_deleted = True
+                db.session.commit()
+                print(f"Marked test opportunity '{title}' as deleted")
+    except Exception as e:
+        print(f"Error cleaning test opportunities: {e}")
+
 # Initialize database
 def init_db():
     with app.app_context():
         db.create_all()
-        # Add some test data if database is empty
-        if Opportunity.query.count() == 0:
-            # Try to load from CSV first
-            load_opportunities_from_csv()
-            
-            # If no CSV data, add test data
-            if Opportunity.query.count() == 0:
-                test_opportunity = Opportunity(
-                    title='Software Engineering Intern',
-                    company='Tech Corp',
-                    location='Remote',
-                    type='internship',
-                    category='tech',
-                    description='Great opportunity for software engineering students',
-                    requirements='Python, JavaScript, React',
-                    salary='$25/hour',
-                    application_url='https://example.com/apply'
-                )
-                db.session.add(test_opportunity)
-                db.session.commit()
+        # Load from CSV only - no test data
+        load_opportunities_from_csv()
+        # Clean up any test opportunities
+        clean_test_opportunities()
 
 # Store the initialization function
 app.init_db = init_db
