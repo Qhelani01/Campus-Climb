@@ -37,12 +37,15 @@ db = SQLAlchemy(app)
 
 # Database Models
 class User(db.Model):
+    __tablename__ = 'users'
+    
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(200), nullable=False)
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -56,23 +59,32 @@ class User(db.Model):
             'email': self.email,
             'first_name': self.first_name,
             'last_name': self.last_name,
-            'created_at': self.created_at.isoformat()
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 class Opportunity(db.Model):
+    __tablename__ = 'opportunities'
+    
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(200), nullable=False, index=True)
     company = db.Column(db.String(100), nullable=False)
     location = db.Column(db.String(100), nullable=False)
-    type = db.Column(db.String(50), nullable=False)
-    category = db.Column(db.String(50), nullable=False)
+    type = db.Column(db.String(50), nullable=False, index=True)
+    category = db.Column(db.String(50), nullable=False, index=True)
     description = db.Column(db.Text, nullable=False)
     requirements = db.Column(db.Text)
     salary = db.Column(db.String(50))
-    deadline = db.Column(db.Date)
+    deadline = db.Column(db.Date, index=True)
     application_url = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_deleted = db.Column(db.Boolean, default=False)  # New field to track deleted items
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, default=False, index=True)  # Soft delete flag
+    
+    # Composite index for common query pattern
+    __table_args__ = (
+        db.Index('idx_opp_active', 'is_deleted', 'type', 'category'),
+    )
     
     def to_dict(self):
         return {
@@ -87,7 +99,8 @@ class Opportunity(db.Model):
             'salary': self.salary,
             'deadline': self.deadline.isoformat() if self.deadline else None,
             'application_url': self.application_url,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 # Helper Functions
@@ -131,32 +144,71 @@ def clean_test_opportunities():
             test_opp = Opportunity.query.filter_by(title=title).first()
             if test_opp:
                 test_opp.is_deleted = True
-                db.session.commit()
-                print(f"Marked test opportunity '{title}' as deleted")
+        # Commit all changes at once
+        try:
+            db.session.commit()
+            print(f"Cleaned test opportunities")
+        except Exception as db_error:
+            db.session.rollback()
+            print(f"Error cleaning test opportunities: {db_error}")
     except Exception as e:
         print(f"Error cleaning test opportunities: {e}")
+        db.session.rollback()
+
+# Database initialization helper
+def tables_exist():
+    """Check if database tables already exist"""
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        existing_tables = inspector.get_table_names()
+        # Check for both explicit table names (with __tablename__) and default SQLAlchemy names
+        # We need both tables to exist
+        has_users = 'users' in existing_tables or 'user' in existing_tables
+        has_opportunities = 'opportunities' in existing_tables or 'opportunity' in existing_tables
+        return has_users and has_opportunities
+    except Exception as e:
+        # If inspection fails, assume tables don't exist
+        print(f"Error checking tables: {e}")
+        return False
 
 # Initialize database
 def init_db():
+    """Initialize database tables only if they don't exist"""
     with app.app_context():
-        db.create_all()
-        # Clean up any test opportunities
-        clean_test_opportunities()
+        try:
+            if not tables_exist():
+                db.create_all()
+                print("Database tables created successfully")
+            else:
+                print("Database tables already exist")
+            # Clean up any test opportunities
+            clean_test_opportunities()
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            raise
 
 # Store the initialization function
 app.init_db = init_db
 
-# Ensure database is initialized on every request in serverless environment
+# Ensure database is initialized on first request in serverless environment
+# Only check once per serverless function instance
+_db_initialized = False
+
 @app.before_request
 def ensure_db_initialized():
-    if os.environ.get('VERCEL'):
+    """Ensure database is initialized, but only check once per serverless instance"""
+    global _db_initialized
+    if os.environ.get('VERCEL') and not _db_initialized:
         try:
-            # Always create tables in serverless environment
             with app.app_context():
-                db.create_all()
-                print(f"Database initialized with {Opportunity.query.count()} opportunities")
+                if not tables_exist():
+                    db.create_all()
+                    print("Database tables created in serverless environment")
+                _db_initialized = True
         except Exception as e:
             print(f"Database initialization error: {e}")
+            # Don't set _db_initialized to True on error, so we can retry
 
 @app.route('/api/test', methods=['GET'])
 def test():
@@ -264,18 +316,19 @@ def register():
         if not is_wvsu_email(email):
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
-        # Ensure tables exist
-        with app.app_context():
-            db.create_all()
-
-        # Uniqueness
+        # Uniqueness check
         if User.query.filter_by(email=email).first():
             return jsonify({'error': 'Email already registered'}), 409
 
+        # Create user
         user = User(email=email, first_name=first_name, last_name=last_name)
         user.set_password(password)
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as db_error:
+            db.session.rollback()
+            return jsonify({'error': f'Database error: {str(db_error)}'}), 500
 
         # Create session
         from flask import session
@@ -302,9 +355,6 @@ def login():
             return jsonify({'error': 'Email and password are required'}), 400
         if not is_wvsu_email(email):
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
-
-        with app.app_context():
-            db.create_all()
 
         user = User.query.filter_by(email=email).first()
         if not user or not user.check_password(password):
@@ -438,12 +488,17 @@ def admin_update_opportunity(id):
         if 'is_deleted' in data:
             opportunity.is_deleted = bool(data['is_deleted'])
         
-        db.session.commit()
-        return jsonify({
-            'message': 'Opportunity updated successfully',
-            'opportunity': opportunity.to_dict()
-        })
+        try:
+            db.session.commit()
+            return jsonify({
+                'message': 'Opportunity updated successfully',
+                'opportunity': opportunity.to_dict()
+            })
+        except Exception as db_error:
+            db.session.rollback()
+            return jsonify({'error': f'Database error: {str(db_error)}'}), 500
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/opportunities/<int:id>', methods=['DELETE'])
@@ -455,10 +510,14 @@ def admin_delete_opportunity(id):
             return jsonify({'error': 'Opportunity not found'}), 404
         
         opportunity.is_deleted = True
-        db.session.commit()
-        
-        return jsonify({'message': 'Opportunity deleted successfully'})
+        try:
+            db.session.commit()
+            return jsonify({'message': 'Opportunity deleted successfully'})
+        except Exception as db_error:
+            db.session.rollback()
+            return jsonify({'error': f'Database error: {str(db_error)}'}), 500
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 # CSV sync endpoints removed - using Supabase as primary database
