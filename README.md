@@ -101,8 +101,9 @@ title,company,location,type,category,description,requirements,salary,deadline,ap
 ## 🔐 Authentication
 
 - Only WVSU students with `@wvstateu.edu` email addresses can register
-- Passwords are securely hashed using bcrypt
-- Session management with localStorage on frontend
+- Passwords are securely hashed using Werkzeug's password hashing
+- Session management with Flask sessions and localStorage fallback for serverless environments
+- Supports both cookie-based sessions and email parameter fallback for Vercel serverless functions
 
 ## 🌐 API Endpoints
 
@@ -115,7 +116,8 @@ title,company,location,type,category,description,requirements,salary,deadline,ap
 ### Authentication
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - User login
-- `GET /api/auth/profile` - Get user profile
+- `GET /api/auth/me` - Get current user profile (supports session or email parameter)
+- `POST /api/auth/logout` - User logout
 
 ### Health
 - `GET /api/health` - Health check endpoint

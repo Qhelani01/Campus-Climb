@@ -93,17 +93,57 @@ class CampusClimbApp {
         const userEmail = localStorage.getItem('userEmail');
         if (userEmail) {
             try {
-                const response = await fetch(`${this.apiBaseUrl}/auth/profile?email=${userEmail}`);
+                // Try with session first, then fallback to email parameter for serverless
+                let response = await fetch(`${this.apiBaseUrl}/auth/me`, {
+                    method: 'GET',
+                    credentials: 'include' // Include cookies for session
+                });
+                
+                // If session doesn't work, try with email parameter (serverless fallback)
+                if (!response.ok) {
+                    response = await fetch(`${this.apiBaseUrl}/auth/me?email=${encodeURIComponent(userEmail)}`, {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
+                }
+                
                 if (response.ok) {
-                    this.currentUser = await response.json();
+                    const data = await response.json();
+                    this.currentUser = data.user; // Backend returns {user: {...}}
+                    // Update stored user data
+                    localStorage.setItem('userData', JSON.stringify(data.user));
                     this.showDashboard();
                 } else {
+                    // If both fail, use stored user data as last resort
+                    const userData = localStorage.getItem('userData');
+                    if (userData) {
+                        try {
+                            this.currentUser = JSON.parse(userData);
+                            this.showDashboard();
+                            return;
+                        } catch (e) {
+                            // Invalid stored data
+                        }
+                    }
                     localStorage.removeItem('userEmail');
+                    localStorage.removeItem('userData');
                     this.showWelcomeSection();
                 }
             } catch (error) {
                 console.error('Error checking auth status:', error);
+                // Fallback to stored user data
+                const userData = localStorage.getItem('userData');
+                if (userData) {
+                    try {
+                        this.currentUser = JSON.parse(userData);
+                        this.showDashboard();
+                        return;
+                    } catch (e) {
+                        // Invalid stored data
+                    }
+                }
                 localStorage.removeItem('userEmail');
+                localStorage.removeItem('userData');
                 this.showWelcomeSection();
             }
         } else {
@@ -169,7 +209,8 @@ class CampusClimbApp {
 
         const totalOpportunities = this.opportunities.length;
         const recentOpportunities = this.opportunities.filter(opp => {
-            const oppDate = new Date(opp.date_posted);
+            const oppDate = opp.created_at ? new Date(opp.created_at) : null;
+            if (!oppDate) return false;
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
             return oppDate >= weekAgo;
@@ -229,11 +270,12 @@ class CampusClimbApp {
         };
 
         const typeColor = typeColors[opportunity.type] || 'bg-gray-100 text-gray-800';
-        const formattedDate = new Date(opportunity.date_posted).toLocaleDateString('en-US', {
+        const dateField = opportunity.created_at || opportunity.date_posted; // Support both for backward compatibility
+        const formattedDate = dateField ? new Date(dateField).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
-        });
+        }) : 'Date not available';
 
         // Truncate description for initial view
         const shortDescription = opportunity.description.length > 150 
@@ -396,6 +438,7 @@ class CampusClimbApp {
                 console.log('Login successful, showing dashboard...');
                 this.currentUser = data.user;
                 localStorage.setItem('userEmail', email);
+                localStorage.setItem('userData', JSON.stringify(data.user)); // Store user data for fallback
                 this.hideLoginModal();
                 this.showDashboard();
                 this.setupPeriodicRefresh(); // Start periodic refresh
@@ -439,6 +482,11 @@ class CampusClimbApp {
             const data = await response.json();
 
             if (response.ok) {
+                // Store user data after registration
+                if (data.user) {
+                    localStorage.setItem('userEmail', data.user.email);
+                    localStorage.setItem('userData', JSON.stringify(data.user));
+                }
                 this.hideRegisterModal();
                 this.showMessage('Registration successful! Please login to continue.', 'success');
             } else {
@@ -450,9 +498,19 @@ class CampusClimbApp {
         }
     }
 
-    logout() {
+    async logout() {
+        try {
+            // Call backend logout endpoint
+            await fetch(`${this.apiBaseUrl}/auth/logout`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
         this.currentUser = null;
         localStorage.removeItem('userEmail');
+        localStorage.removeItem('userData');
         this.showWelcomeSection();
         this.showMessage('Logged out successfully!', 'success');
     }

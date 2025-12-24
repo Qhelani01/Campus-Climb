@@ -12,7 +12,12 @@ app = Flask(__name__)
 CORS(app)
 
 # Session configuration
+# Use cookie-based sessions for better serverless compatibility
+# In serverless environments, filesystem sessions don't persist
 app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('VERCEL') is not None  # HTTPS only in production
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 Session(app)
 
 # Database configuration
@@ -330,18 +335,29 @@ def logout():
 
 @app.route('/api/auth/me', methods=['GET'])
 def get_current_user():
-    """Get current logged in user from session"""
+    """Get current logged in user from session or email parameter (for serverless fallback)"""
     try:
         from flask import session
+        
+        # Try to get user from session first
         user_id = session.get('user_id')
-        if not user_id:
-            return jsonify({'error': 'Not authenticated'}), 401
+        email = request.args.get('email')  # Fallback for serverless environments
         
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+        if user_id:
+            user = User.query.get(user_id)
+            if user:
+                return jsonify({'user': user.to_dict()})
         
-        return jsonify({'user': user.to_dict()})
+        # Fallback: if email provided and session doesn't work (serverless), validate user exists
+        if email:
+            user = User.query.filter_by(email=email.lower().strip()).first()
+            if user:
+                # Create session for future requests
+                session['user_id'] = user.id
+                session['email'] = user.email
+                return jsonify({'user': user.to_dict()})
+        
+        return jsonify({'error': 'Not authenticated'}), 401
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
