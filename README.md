@@ -149,6 +149,7 @@ API will be available at: `http://localhost:5000`
 - Supabase PostgreSQL database
 - Environment variables: `DATABASE_URL` and `SECRET_KEY`
 - Data loaded from CSV file
+- **Security**: Row Level Security (RLS) enabled - see `migrations/` directory for setup
 
 ### Adding New Features
 1. **Backend**: Add routes in `api/index.py`

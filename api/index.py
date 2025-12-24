@@ -174,14 +174,21 @@ def tables_exist():
 
 # Initialize database
 def init_db():
-    """Initialize database tables only if they don't exist"""
+    """
+    Initialize database tables only if they don't exist.
+    
+    NOTE: If you're using the database/01_complete_schema.sql file,
+    tables are created manually in Supabase. This function will detect
+    existing tables and skip creation.
+    """
     with app.app_context():
         try:
             if not tables_exist():
+                print("Tables don't exist. Creating them...")
                 db.create_all()
                 print("Database tables created successfully")
             else:
-                print("Database tables already exist")
+                print("Database tables already exist (created via SQL schema)")
             # Clean up any test opportunities
             clean_test_opportunities()
         except Exception as e:
@@ -197,14 +204,23 @@ _db_initialized = False
 
 @app.before_request
 def ensure_db_initialized():
-    """Ensure database is initialized, but only check once per serverless instance"""
+    """
+    Ensure database is initialized, but only check once per serverless instance.
+    
+    This is a safety net - if tables don't exist, it will create them.
+    However, if you've run the database/01_complete_schema.sql file,
+    tables will already exist and this will just verify.
+    """
     global _db_initialized
     if os.environ.get('VERCEL') and not _db_initialized:
         try:
             with app.app_context():
                 if not tables_exist():
+                    print("Tables don't exist in serverless. Creating them...")
                     db.create_all()
                     print("Database tables created in serverless environment")
+                else:
+                    print("Database tables already exist (verified)")
                 _db_initialized = True
         except Exception as e:
             print(f"Database initialization error: {e}")
