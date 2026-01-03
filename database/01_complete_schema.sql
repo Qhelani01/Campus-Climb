@@ -48,6 +48,7 @@ CREATE TABLE public.users (
     password_hash VARCHAR(200) NOT NULL,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -105,6 +106,7 @@ CREATE TABLE public.opportunities (
 -- Users table indexes
 CREATE INDEX idx_users_email ON public.users(email);
 CREATE INDEX idx_users_created_at ON public.users(created_at);
+CREATE INDEX idx_users_is_admin ON public.users(is_admin);
 
 -- Opportunities table indexes
 CREATE INDEX idx_opportunities_title ON public.opportunities(title);
@@ -160,4 +162,8 @@ FROM pg_tables
 WHERE schemaname = 'public' 
 AND tablename IN ('users', 'opportunities')
 ORDER BY tablename;
+
+
+
+
 

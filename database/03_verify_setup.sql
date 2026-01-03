@@ -87,3 +87,7 @@ SELECT
     (SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public' AND tablename IN ('users', 'opportunities')) as indexes_count,
     (SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public' AND tablename IN ('users', 'opportunities')) as policies_count;
 
+
+
+
+

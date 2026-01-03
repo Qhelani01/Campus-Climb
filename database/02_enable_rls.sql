@@ -145,3 +145,7 @@ WHERE schemaname = 'public'
 AND tablename IN ('users', 'opportunities')
 ORDER BY tablename, policyname;
 
+
+
+
+

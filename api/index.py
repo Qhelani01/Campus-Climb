@@ -44,6 +44,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(200), nullable=False)
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -59,6 +60,7 @@ class User(db.Model):
             'email': self.email,
             'first_name': self.first_name,
             'last_name': self.last_name,
+            'is_admin': self.is_admin,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -108,24 +110,37 @@ def is_wvsu_email(email):
     """Check if email ends with @wvstateu.edu"""
     return email.lower().endswith('@wvstateu.edu')
 
-def is_admin_email(email):
-    """Check if email is admin email"""
-    admin_emails = ['qhestoemoyo@gmail.com', 'chiwalenatwange@gmail.com']
-    return email.lower() in admin_emails
-
-def get_admin_password(email):
-    """Get admin password based on email"""
-    admin_credentials = {
-        'qhestoemoyo@gmail.com': '3991Gwabalanda',
-        'chiwalenatwange@gmail.com': 'noodles2001'
-    }
-    return admin_credentials.get(email.lower())
+def get_current_user():
+    """Get current user from session or email parameter"""
+    from flask import session
+    user_id = session.get('user_id')
+    email = request.args.get('email')  # Fallback for serverless
+    
+    if user_id:
+        user = User.query.get(user_id)
+        if user:
+            return user
+    
+    # Fallback: if email provided (serverless), validate user exists
+    if email:
+        user = User.query.filter_by(email=email.lower().strip()).first()
+        if user:
+            # Create session for future requests
+            session['user_id'] = user.id
+            session['email'] = user.email
+            return user
+    
+    return None
 
 def admin_required(f):
     """Decorator to require admin authentication"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # For now, allow all requests (we'll add proper auth later)
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Authentication required'}), 401
+        if not user.is_admin:
+            return jsonify({'error': 'Admin access required'}), 403
         return f(*args, **kwargs)
     return decorated_function
 
@@ -400,35 +415,19 @@ def logout():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/me', methods=['GET'])
-def get_current_user():
+def get_current_user_endpoint():
     """Get current logged in user from session or email parameter (for serverless fallback)"""
     try:
-        from flask import session
-        
-        # Try to get user from session first
-        user_id = session.get('user_id')
-        email = request.args.get('email')  # Fallback for serverless environments
-        
-        if user_id:
-            user = User.query.get(user_id)
-            if user:
-                return jsonify({'user': user.to_dict()})
-        
-        # Fallback: if email provided and session doesn't work (serverless), validate user exists
-        if email:
-            user = User.query.filter_by(email=email.lower().strip()).first()
-            if user:
-                # Create session for future requests
-                session['user_id'] = user.id
-                session['email'] = user.email
-                return jsonify({'user': user.to_dict()})
-        
+        user = get_current_user()
+        if user:
+            return jsonify({'user': user.to_dict()})
         return jsonify({'error': 'Not authenticated'}), 401
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # Admin endpoints for opportunity management
 @app.route('/api/admin/opportunities', methods=['GET'])
+@admin_required
 def admin_get_opportunities():
     """Get all opportunities for admin (including deleted)"""
     try:
@@ -438,6 +437,7 @@ def admin_get_opportunities():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/opportunities', methods=['POST'])
+@admin_required
 def admin_create_opportunity():
     """Create a new opportunity"""
     try:
@@ -475,6 +475,7 @@ def admin_create_opportunity():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/opportunities/<int:id>', methods=['PUT'])
+@admin_required
 def admin_update_opportunity(id):
     """Update an opportunity"""
     try:
@@ -518,6 +519,7 @@ def admin_update_opportunity(id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/opportunities/<int:id>', methods=['DELETE'])
+@admin_required
 def admin_delete_opportunity(id):
     """Delete an opportunity (soft delete)"""
     try:
@@ -540,6 +542,7 @@ def admin_delete_opportunity(id):
 
 # Additional admin endpoints
 @app.route('/api/admin/users', methods=['GET'])
+@admin_required
 def admin_get_users():
     """Get all users for admin"""
     try:
@@ -549,6 +552,7 @@ def admin_get_users():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/dashboard', methods=['GET'])
+@admin_required
 def admin_dashboard():
     """Get admin dashboard data"""
     try:
@@ -564,6 +568,46 @@ def admin_dashboard():
             'recent_users': [user.to_dict() for user in recent_users],
             'recent_opportunities': [opp.to_dict() for opp in recent_opportunities]
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/promote', methods=['POST'])
+def admin_promote_user():
+    """
+    Promote a user to admin. 
+    Protected by ADMIN_SECRET_KEY environment variable for initial setup.
+    After first admin is created, this endpoint should be disabled or further secured.
+    """
+    try:
+        # Check for admin secret key (for initial setup only)
+        admin_secret = os.environ.get('ADMIN_SECRET_KEY')
+        if not admin_secret:
+            return jsonify({'error': 'Admin promotion not configured'}), 403
+        
+        data = request.get_json() or {}
+        secret_key = data.get('secret_key')
+        email = (data.get('email') or '').strip().lower()
+        
+        if not secret_key or secret_key != admin_secret:
+            return jsonify({'error': 'Invalid secret key'}), 403
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user.is_admin = True
+        try:
+            db.session.commit()
+            return jsonify({
+                'message': 'User promoted to admin successfully',
+                'user': user.to_dict()
+            })
+        except Exception as db_error:
+            db.session.rollback()
+            return jsonify({'error': f'Database error: {str(db_error)}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
