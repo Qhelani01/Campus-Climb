@@ -356,31 +356,46 @@ def register():
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
         # Uniqueness check
-        if User.query.filter_by(email=email).first():
-            return jsonify({'error': 'Email already registered'}), 409
+        try:
+            existing_user = User.query.filter_by(email=email).first()
+            if existing_user:
+                return jsonify({'error': 'Email already registered'}), 409
+        except Exception as query_error:
+            print(f"Error checking existing user: {query_error}")
+            db.session.rollback()
+            return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
         # Create user
-        user = User(email=email, first_name=first_name, last_name=last_name)
-        user.set_password(password)
-        db.session.add(user)
         try:
+            user = User(email=email, first_name=first_name, last_name=last_name)
+            user.set_password(password)
+            db.session.add(user)
             db.session.commit()
         except Exception as db_error:
             db.session.rollback()
+            print(f"Database error during registration: {db_error}")
+            import traceback
+            traceback.print_exc()
             return jsonify({'error': f'Database error: {str(db_error)}'}), 500
 
         # Create session
-        from flask import session
-        session['user_id'] = user.id
-        session['email'] = user.email
-        
+        try:
+            from flask import session
+            session['user_id'] = user.id
+            session['email'] = user.email
+        except Exception as session_error:
+            print(f"Session error: {session_error}")
+            # Session error is not critical, continue with registration
+
         return jsonify({
             'message': 'Registration successful', 
-            'user': user.to_dict(),
-            'session_id': session.sid if hasattr(session, 'sid') else None
+            'user': user.to_dict()
         }), 201
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Unexpected error in register: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
