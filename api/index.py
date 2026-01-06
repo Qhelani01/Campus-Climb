@@ -377,6 +377,9 @@ def ensure_db_initialized():
             # Check and add is_admin column if missing
             check_and_add_is_admin_column()
             
+            # Check and add user profile columns if missing
+            check_and_add_user_profile_columns()
+            
             _db_initialized = True
         except Exception as e:
             print(f"Database initialization error: {e}")
