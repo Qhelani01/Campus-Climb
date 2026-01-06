@@ -605,10 +605,20 @@ class CampusClimbApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: 'include', // Include cookies for session
                 body: JSON.stringify({ email, password })
             });
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error('Failed to parse JSON response:', jsonError);
+                const text = await response.text();
+                console.error('Response text:', text);
+                this.showMessage(`Server error: ${response.status} ${response.statusText}. Please check your connection.`, 'error', 'loginMessage');
+                return;
+            }
 
             if (response.ok) {
                 this.currentUser = data.user;
@@ -619,11 +629,16 @@ class CampusClimbApp {
                 this.setupPeriodicRefresh();
                 this.showMessage('Login successful! Welcome back.', 'success');
             } else {
-                this.showMessage(data.error || 'Invalid email or password.', 'error', 'loginMessage');
+                const errorMsg = data.error || `Login failed (${response.status}). Please try again.`;
+                console.error('Login failed:', response.status, data);
+                this.showMessage(errorMsg, 'error', 'loginMessage');
             }
         } catch (error) {
             console.error('Login error:', error);
-            this.showMessage('Login failed. Please check your connection and try again.', 'error', 'loginMessage');
+            const errorMsg = error.message.includes('Failed to fetch') || error.message.includes('NetworkError')
+                ? 'Cannot connect to server. Please make sure the backend is running on port 8000.'
+                : `Login failed: ${error.message}. Please check your connection and try again.`;
+            this.showMessage(errorMsg, 'error', 'loginMessage');
         } finally {
             this.setButtonLoading('loginSubmitBtn', false);
         }
@@ -654,10 +669,20 @@ class CampusClimbApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: 'include', // Include cookies for session
                 body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password })
             });
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error('Failed to parse JSON response:', jsonError);
+                const text = await response.text();
+                console.error('Response text:', text);
+                this.showMessage(`Server error: ${response.status} ${response.statusText}. Please check your connection.`, 'error', 'registerMessage');
+                return;
+            }
 
             if (response.ok) {
                 if (data.user) {
@@ -667,11 +692,16 @@ class CampusClimbApp {
                 this.hideRegisterModal();
                 this.showMessage('Registration successful! Please login to continue.', 'success');
             } else {
-                this.showMessage(data.error || 'Registration failed. Please try again.', 'error', 'registerMessage');
+                const errorMsg = data.error || `Registration failed (${response.status}). Please try again.`;
+                console.error('Registration failed:', response.status, data);
+                this.showMessage(errorMsg, 'error', 'registerMessage');
             }
         } catch (error) {
             console.error('Registration error:', error);
-            this.showMessage('Registration failed. Please check your connection and try again.', 'error', 'registerMessage');
+            const errorMsg = error.message.includes('Failed to fetch') || error.message.includes('NetworkError')
+                ? 'Cannot connect to server. Please make sure the backend is running on port 8000.'
+                : `Registration failed: ${error.message}. Please check your connection and try again.`;
+            this.showMessage(errorMsg, 'error', 'registerMessage');
         } finally {
             this.setButtonLoading('registerSubmitBtn', false);
         }
