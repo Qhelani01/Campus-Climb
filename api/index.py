@@ -629,19 +629,29 @@ def login():
         if not is_wvsu_email(email):
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
+        # Check and add missing columns (migration)
+        try:
+            check_and_add_is_admin_column()
+            check_and_add_user_profile_columns()
+        except Exception as migration_error:
+            print(f"Migration check failed (non-critical): {migration_error}")
+
         try:
             user = User.query.filter_by(email=email).first()
         except Exception as query_error:
-            # Check if it's the is_admin column error
+            # Check if it's a missing column error
             error_str = str(query_error)
-            if 'is_admin' in error_str and 'does not exist' in error_str:
-                print("is_admin column missing. Attempting migration...")
+            if ('is_admin' in error_str or 'resume_summary' in error_str or 'skills' in error_str or 'career_goals' in error_str) and 'does not exist' in error_str:
+                print("Missing column detected. Attempting migration...")
                 try:
                     check_and_add_is_admin_column()
+                    check_and_add_user_profile_columns()
                     # Retry the query
                     user = User.query.filter_by(email=email).first()
                 except Exception as retry_error:
                     print(f"Migration failed: {retry_error}")
+                    import traceback
+                    traceback.print_exc()
                     return jsonify({'error': 'Database migration required. Please contact support.'}), 500
             else:
                 print(f"Error querying user: {query_error}")
