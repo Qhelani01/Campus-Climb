@@ -103,6 +103,21 @@ class CampusClimbApp {
         document.getElementById('registerModal').addEventListener('click', (e) => {
             if (e.target.id === 'registerModal') this.hideRegisterModal();
         });
+        document.getElementById('aiAssistantModal').addEventListener('click', (e) => {
+            if (e.target.id === 'aiAssistantModal') this.hideAIAssistant();
+        });
+        
+        // AI Assistant tab switching
+        document.querySelectorAll('.ai-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const type = tab.dataset.type;
+                this.switchAITab(type);
+            });
+        });
+        
+        // AI Assistant buttons
+        document.getElementById('generateAdviceBtn').addEventListener('click', () => this.generateAIAdvice());
+        document.getElementById('saveProfileBtn').addEventListener('click', () => this.saveUserProfile());
 
         // Forms
         document.getElementById('loginForm').addEventListener('submit', (e) => this.handleLogin(e));
@@ -521,17 +536,28 @@ class CampusClimbApp {
             
             <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                 <span class="text-sm font-semibold text-gray-600 px-3 py-1 bg-gray-100 rounded-full">${opportunity.category}</span>
-                <button class="learn-more-btn text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors flex items-center gap-1">
-                    Learn More
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                </button>
+                <div class="flex items-center gap-3">
+                    <button class="ai-assistance-btn text-purple-600 hover:text-purple-700 font-semibold text-sm transition-colors flex items-center gap-1" data-opportunity-id="${opportunity.id}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        AI Help
+                    </button>
+                    <button class="learn-more-btn text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors flex items-center gap-1">
+                        Learn More
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
         `;
 
         const learnMoreBtn = card.querySelector('.learn-more-btn');
         learnMoreBtn.addEventListener('click', () => this.toggleOpportunityExpansion(card));
+        
+        const aiAssistanceBtn = card.querySelector('.ai-assistance-btn');
+        aiAssistanceBtn.addEventListener('click', () => this.showAIAssistant(opportunity.id));
 
         return card;
     }

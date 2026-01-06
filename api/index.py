@@ -6,8 +6,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import text
 import os
 import json
+import sys
 from datetime import datetime
 from functools import wraps
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ai_assistant import generate_application_advice
 
 app = Flask(__name__)
 # Configure CORS to allow requests from frontend
@@ -66,6 +71,10 @@ class User(db.Model):
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    # AI Assistant profile fields
+    resume_summary = db.Column(db.Text, nullable=True)
+    skills = db.Column(db.Text, nullable=True)  # JSON string or comma-separated
+    career_goals = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -82,8 +91,28 @@ class User(db.Model):
             'first_name': self.first_name,
             'last_name': self.last_name,
             'is_admin': self.is_admin,
+            'resume_summary': self.resume_summary,
+            'skills': self.skills,
+            'career_goals': self.career_goals,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def get_user_info_for_ai(self):
+        """Get user info formatted for AI assistant"""
+        skills_list = []
+        if self.skills:
+            try:
+                # Try parsing as JSON first
+                skills_list = json.loads(self.skills)
+            except:
+                # Fallback to comma-separated string
+                skills_list = [s.strip() for s in self.skills.split(',') if s.strip()]
+        
+        return {
+            'resume_summary': self.resume_summary or '',
+            'skills': skills_list,
+            'career_goals': self.career_goals or ''
         }
 
 class Opportunity(db.Model):

@@ -277,9 +277,26 @@
         }
         
         .modal-close:hover {
-            background: #e2e8f0;
+            background: #dbeafe;
             transform: rotate(90deg);
             color: #1e293b;
+        }
+        
+        .ai-tab {
+            color: #64748b;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .ai-tab:hover {
+            color: var(--blue-primary);
+            background: rgba(30, 64, 175, 0.05);
+        }
+        
+        .ai-tab.active {
+            color: var(--blue-primary);
+            border-bottom-color: var(--blue-primary);
         }
         
         /* ============================================
@@ -878,6 +895,78 @@
                         </div>
                     </form>
                     <div id="registerMessage" class="mt-4 text-sm text-center"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Assistant Modal -->
+        <div id="aiAssistantModal" class="fixed inset-0 modal hidden z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="modal-content p-8 max-w-4xl w-full mx-4 relative max-h-[90vh] overflow-y-auto">
+                    <button class="modal-close" id="closeAIAssistantModal" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                    <div class="text-center mb-6">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-2">AI Application Assistant</h3>
+                        <p class="text-gray-600" id="aiAssistantOpportunityTitle">Get personalized help for your application</p>
+                    </div>
+                    
+                    <!-- Tabs -->
+                    <div class="flex border-b border-gray-200 mb-6">
+                        <button class="ai-tab active px-6 py-3 font-semibold text-sm" data-type="resume_tips">
+                            Resume Tips
+                        </button>
+                        <button class="ai-tab px-6 py-3 font-semibold text-sm" data-type="cover_letter">
+                            Cover Letter
+                        </button>
+                        <button class="ai-tab px-6 py-3 font-semibold text-sm" data-type="interview_prep">
+                            Interview Prep
+                        </button>
+                        <button class="ai-tab px-6 py-3 font-semibold text-sm" data-type="application_review">
+                            Application Review
+                        </button>
+                    </div>
+
+                    <!-- User Info Section -->
+                    <div class="mb-6 p-4 bg-blue-50 rounded-xl">
+                        <h4 class="font-semibold text-gray-900 mb-3">Your Background (Optional)</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Resume Summary</label>
+                                <textarea id="aiResumeSummary" class="input-field w-full px-4 py-3 text-gray-900" rows="3" placeholder="Brief summary of your experience, education, and key achievements..."></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Skills</label>
+                                <input type="text" id="aiSkills" class="input-field w-full px-4 py-3 text-gray-900" placeholder="e.g., Python, JavaScript, Project Management (comma-separated)">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Career Goals</label>
+                                <textarea id="aiCareerGoals" class="input-field w-full px-4 py-3 text-gray-900" rows="2" placeholder="What are your career goals and interests?"></textarea>
+                            </div>
+                            <button id="saveProfileBtn" class="btn-secondary text-sm px-4 py-2">Save to Profile</button>
+                        </div>
+                    </div>
+
+                    <!-- AI Response Area -->
+                    <div class="mb-6">
+                        <button id="generateAdviceBtn" class="btn-primary text-white px-8 py-3 rounded-xl font-semibold w-full mb-4">
+                            Generate AI Advice
+                        </button>
+                        <div id="aiResponseArea" class="hidden">
+                            <div class="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                                <h4 class="font-semibold text-gray-900 mb-4">AI Recommendations</h4>
+                                <div id="aiAdviceContent" class="text-gray-700 whitespace-pre-wrap"></div>
+                                <div id="aiSuggestionsList" class="mt-4 space-y-2"></div>
+                            </div>
+                        </div>
+                        <div id="aiLoadingArea" class="hidden text-center py-8">
+                            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                            <p class="mt-4 text-gray-600">Generating personalized advice...</p>
+                        </div>
+                        <div id="aiErrorMessage" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700"></div>
+                    </div>
                 </div>
             </div>
         </div>
