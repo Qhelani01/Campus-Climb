@@ -305,6 +305,48 @@ def check_and_add_is_admin_column():
         db.session.rollback()
         return False
 
+def check_and_add_user_profile_columns():
+    """Check if user profile columns exist, add them if missing"""
+    try:
+        # Check which columns exist
+        result = db.session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'users' 
+            AND column_name IN ('resume_summary', 'skills', 'career_goals')
+        """))
+        existing_columns = {row[0] for row in result.fetchall()}
+        
+        columns_to_add = []
+        if 'resume_summary' not in existing_columns:
+            columns_to_add.append('resume_summary TEXT')
+        if 'skills' not in existing_columns:
+            columns_to_add.append('skills TEXT')
+        if 'career_goals' not in existing_columns:
+            columns_to_add.append('career_goals TEXT')
+        
+        if columns_to_add:
+            print(f"User profile columns missing. Adding: {', '.join([c.split()[0] for c in columns_to_add])}...")
+            for column_def in columns_to_add:
+                column_name = column_def.split()[0]
+                db.session.execute(text(f"""
+                    ALTER TABLE public.users 
+                    ADD COLUMN {column_def}
+                """))
+            db.session.commit()
+            print("User profile columns added successfully")
+            return True
+        else:
+            print("User profile columns already exist")
+            return False
+    except Exception as e:
+        print(f"Error checking/adding user profile columns: {e}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return False
+
 @app.before_request
 def ensure_db_initialized():
     """
@@ -498,6 +540,12 @@ def register():
             check_and_add_is_admin_column()
         except Exception as migration_error:
             print(f"Migration check failed (non-critical): {migration_error}")
+
+        # Check and add user profile columns if missing (migration)
+        try:
+            check_and_add_user_profile_columns()
+        except Exception as migration_error:
+            print(f"Profile columns migration check failed (non-critical): {migration_error}")
 
         # Uniqueness check
         try:
