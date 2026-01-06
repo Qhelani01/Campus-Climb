@@ -671,32 +671,49 @@ class CampusClimbApp {
         this.setButtonLoading('registerSubmitBtn', true);
 
         try {
+            const requestData = { first_name: firstName, last_name: lastName, email, password };
+            console.log('Attempting registration with:', { ...requestData, password: '***' });
+            console.log('API URL:', `${this.apiBaseUrl}/auth/register`);
+
             const response = await fetch(`${this.apiBaseUrl}/auth/register`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include', // Include cookies for session
-                body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password })
+                body: JSON.stringify(requestData)
             });
+
+            console.log('Response status:', response.status);
+            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
             // Clone response for potential error reading
             const responseClone = response.clone();
             let data;
 
             try {
-                data = await response.json();
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+                
+                if (!responseText) {
+                    throw new Error('Empty response from server');
+                }
+                
+                data = JSON.parse(responseText);
             } catch (jsonError) {
                 console.error('Failed to parse JSON response:', jsonError);
                 try {
                     const text = await responseClone.text();
-                    console.error('Response text:', text);
+                    console.error('Response text (from clone):', text);
+                    this.showMessage(`Server error: ${response.status} ${response.statusText}. Response: ${text.substring(0, 100)}`, 'error', 'registerMessage');
                 } catch (textError) {
                     console.error('Could not read response text:', textError);
+                    this.showMessage(`Server error: ${response.status} ${response.statusText}. Please check your connection.`, 'error', 'registerMessage');
                 }
-                this.showMessage(`Server error: ${response.status} ${response.statusText}. Please check your connection.`, 'error', 'registerMessage');
                 return;
             }
+
+            console.log('Parsed response data:', data);
 
             if (response.ok) {
                 if (data.user) {
@@ -712,6 +729,7 @@ class CampusClimbApp {
             }
         } catch (error) {
             console.error('Registration error:', error);
+            console.error('Error stack:', error.stack);
             const errorMsg = error.message.includes('Failed to fetch') || error.message.includes('NetworkError')
                 ? 'Cannot connect to server. Please make sure the backend is running on port 8000.'
                 : `Registration failed: ${error.message}. Please check your connection and try again.`;

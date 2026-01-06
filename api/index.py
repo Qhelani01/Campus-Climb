@@ -256,6 +256,26 @@ def test():
         'status': 'success'
     })
 
+@app.route('/api/test/register', methods=['POST'])
+def test_register():
+    """Test endpoint to debug registration issues"""
+    try:
+        data = request.get_json() or {}
+        print(f"Received registration data: {data}")
+        print(f"Request headers: {dict(request.headers)}")
+        print(f"Request origin: {request.headers.get('Origin')}")
+        
+        return jsonify({
+            'message': 'Test endpoint reached',
+            'received_data': data,
+            'headers': dict(request.headers)
+        }), 200
+    except Exception as e:
+        print(f"Error in test endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/health', methods=['GET'])
 def health():
     try:
@@ -410,22 +430,41 @@ def login():
         if not is_wvsu_email(email):
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
-        user = User.query.filter_by(email=email).first()
-        if not user or not user.check_password(password):
+        try:
+            user = User.query.filter_by(email=email).first()
+        except Exception as query_error:
+            print(f"Error querying user: {query_error}")
+            db.session.rollback()
+            return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
+
+        if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
 
+        try:
+            if not user.check_password(password):
+                return jsonify({'error': 'Invalid credentials'}), 401
+        except Exception as password_error:
+            print(f"Error checking password: {password_error}")
+            return jsonify({'error': 'Authentication error'}), 500
+
         # Create session
-        from flask import session
-        session['user_id'] = user.id
-        session['email'] = user.email
-        
+        try:
+            from flask import session
+            session['user_id'] = user.id
+            session['email'] = user.email
+        except Exception as session_error:
+            print(f"Session error: {session_error}")
+            # Session error is not critical, continue with login
+
         return jsonify({
             'message': 'Login successful', 
-            'user': user.to_dict(),
-            'session_id': session.sid if hasattr(session, 'sid') else None
+            'user': user.to_dict()
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Unexpected error in login: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Login failed: {str(e)}'}), 500
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
