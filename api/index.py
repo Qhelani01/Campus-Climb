@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import text
 import os
 import json
 from datetime import datetime
@@ -20,10 +21,18 @@ CORS(app, resources={
 })
 
 # Session configuration
-# Use cookie-based sessions for better serverless compatibility
-# In serverless environments, filesystem sessions don't persist
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('VERCEL') is not None  # HTTPS only in production
+# Use null sessions for serverless (Vercel) - sessions stored in cookies only
+# Filesystem sessions don't work on Vercel serverless functions
+is_vercel = os.environ.get('VERCEL') is not None
+if is_vercel:
+    # On Vercel, use null session backend (sessions in cookies only)
+    app.config['SESSION_TYPE'] = 'null'
+else:
+    # Local development can use filesystem
+    app.config['SESSION_TYPE'] = 'filesystem'
+
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
+app.config['SESSION_COOKIE_SECURE'] = is_vercel  # HTTPS only in production
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 Session(app)
@@ -39,7 +48,11 @@ elif database_url.startswith('postgres://'):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+    'connect_args': {'connect_timeout': 10}
+}
 
 db = SQLAlchemy(app)
 
@@ -235,19 +248,29 @@ def ensure_db_initialized():
     tables will already exist and this will just verify.
     """
     global _db_initialized
-    if os.environ.get('VERCEL') and not _db_initialized:
+    is_vercel = os.environ.get('VERCEL') is not None
+    
+    # Always check on Vercel, but only once per function instance
+    if is_vercel and not _db_initialized:
         try:
-            with app.app_context():
-                if not tables_exist():
-                    print("Tables don't exist in serverless. Creating them...")
-                    db.create_all()
-                    print("Database tables created in serverless environment")
-                else:
-                    print("Database tables already exist (verified)")
-                _db_initialized = True
+            # Test database connection first
+            db.session.execute(text('SELECT 1'))
+            
+            # Check if tables exist
+            if not tables_exist():
+                print("Tables don't exist in serverless. Creating them...")
+                db.create_all()
+                db.session.commit()
+                print("Database tables created in serverless environment")
+            else:
+                print("Database tables already exist (verified)")
+            _db_initialized = True
         except Exception as e:
             print(f"Database initialization error: {e}")
+            import traceback
+            traceback.print_exc()
             # Don't set _db_initialized to True on error, so we can retry
+            # But don't fail the request - let individual endpoints handle errors
 
 @app.route('/api/test', methods=['GET'])
 def test():
@@ -280,7 +303,6 @@ def test_register():
 def health():
     try:
         # Test database connection
-        from sqlalchemy import text
         db.session.execute(text('SELECT 1'))
         return jsonify({
             'status': 'healthy',
@@ -297,6 +319,9 @@ def health():
 @app.route('/api/opportunities', methods=['GET'])
 def opportunities():
     try:
+        # Ensure database connection
+        db.session.execute(text('SELECT 1'))
+        
         # Read from database - include opportunities where is_deleted is False or null
         query = Opportunity.query.filter(
             (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
@@ -321,7 +346,10 @@ def opportunities():
         opportunities = query.order_by(Opportunity.created_at.desc()).all()
         return jsonify([opp.to_dict() for opp in opportunities])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in opportunities endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to load opportunities: {str(e)}'}), 500
 
 @app.route('/api/opportunities/<int:id>', methods=['GET'])
 def get_opportunity(id):
@@ -341,28 +369,47 @@ def get_opportunity(id):
 def get_opportunity_types():
     """Get all unique opportunity types"""
     try:
+        # Ensure database connection
+        db.session.execute(text('SELECT 1'))
+        
         types = db.session.query(Opportunity.type).filter(
             (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
         ).distinct().all()
         return jsonify([t[0] for t in types])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in get_opportunity_types: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to load types: {str(e)}'}), 500
 
 @app.route('/api/opportunities/categories', methods=['GET'])
 def get_opportunity_categories():
     """Get all unique opportunity categories"""
     try:
+        # Ensure database connection
+        db.session.execute(text('SELECT 1'))
+        
         categories = db.session.query(Opportunity.category).filter(
             (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
         ).distinct().all()
         return jsonify([c[0] for c in categories])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in get_opportunity_categories: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to load categories: {str(e)}'}), 500
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """Register a new user. Only WVSU emails (@wvstateu.edu) are allowed."""
     try:
+        # Ensure database connection
+        try:
+            db.session.execute(text('SELECT 1'))
+        except Exception as conn_error:
+            print(f"Database connection error: {conn_error}")
+            return jsonify({'error': 'Database connection failed. Please try again later.'}), 500
+
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()
         password = data.get('password') or ''
@@ -382,6 +429,8 @@ def register():
                 return jsonify({'error': 'Email already registered'}), 409
         except Exception as query_error:
             print(f"Error checking existing user: {query_error}")
+            import traceback
+            traceback.print_exc()
             db.session.rollback()
             return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
@@ -404,7 +453,7 @@ def register():
             session['user_id'] = user.id
             session['email'] = user.email
         except Exception as session_error:
-            print(f"Session error: {session_error}")
+            print(f"Session error (non-critical): {session_error}")
             # Session error is not critical, continue with registration
 
         return jsonify({
@@ -421,6 +470,15 @@ def register():
 def login():
     """Authenticate existing user. Only WVSU emails allowed. No mock users."""
     try:
+        # Ensure database connection
+        try:
+            db.session.execute(text('SELECT 1'))
+        except Exception as conn_error:
+            print(f"Database connection error: {conn_error}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': 'Database connection failed. Please try again later.'}), 500
+
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()
         password = data.get('password') or ''
@@ -434,6 +492,8 @@ def login():
             user = User.query.filter_by(email=email).first()
         except Exception as query_error:
             print(f"Error querying user: {query_error}")
+            import traceback
+            traceback.print_exc()
             db.session.rollback()
             return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
@@ -445,6 +505,8 @@ def login():
                 return jsonify({'error': 'Invalid credentials'}), 401
         except Exception as password_error:
             print(f"Error checking password: {password_error}")
+            import traceback
+            traceback.print_exc()
             return jsonify({'error': 'Authentication error'}), 500
 
         # Create session
@@ -453,7 +515,7 @@ def login():
             session['user_id'] = user.id
             session['email'] = user.email
         except Exception as session_error:
-            print(f"Session error: {session_error}")
+            print(f"Session error (non-critical): {session_error}")
             # Session error is not critical, continue with login
 
         return jsonify({
