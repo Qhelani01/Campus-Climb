@@ -21,6 +21,10 @@ wheels/
 *.egg
 MANIFEST
 
+# Flask Session
+flask_session/
+api/flask_session/
+
 # Virtual environments
 venv/
 env/

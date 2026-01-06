@@ -335,3 +335,4 @@ CREATE INDEX idx_opp_active ON opportunities(is_deleted, type, category);
 
 
 
+
