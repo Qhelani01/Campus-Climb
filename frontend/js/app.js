@@ -4,6 +4,8 @@ class CampusClimbApp {
         this.apiBaseUrl = window.APP_CONFIG ? window.APP_CONFIG.apiBaseUrl : 'http://localhost:8000/api';
         this.currentUser = null;
         this.opportunities = [];
+        this.filteredOpportunities = [];
+        this.searchQuery = '';
         this.initialized = false;
         this.init();
     }
@@ -32,24 +34,50 @@ class CampusClimbApp {
         // Modal controls
         document.getElementById('closeLoginModal').addEventListener('click', () => this.hideLoginModal());
         document.getElementById('closeRegisterModal').addEventListener('click', () => this.hideRegisterModal());
+        document.getElementById('closeLoginModalBtn').addEventListener('click', () => this.hideLoginModal());
+        document.getElementById('closeRegisterModalBtn').addEventListener('click', () => this.hideRegisterModal());
+
+        // Close modals on backdrop click
+        document.getElementById('loginModal').addEventListener('click', (e) => {
+            if (e.target.id === 'loginModal') this.hideLoginModal();
+        });
+        document.getElementById('registerModal').addEventListener('click', (e) => {
+            if (e.target.id === 'registerModal') this.hideRegisterModal();
+        });
 
         // Forms
         document.getElementById('loginForm').addEventListener('submit', (e) => this.handleLogin(e));
         document.getElementById('registerForm').addEventListener('submit', (e) => this.handleRegister(e));
 
-        // Dashboard buttons - only available after login
+        // Dashboard buttons
         document.getElementById('viewAllBtn').addEventListener('click', () => this.showOpportunitiesSection());
 
         // Filter controls
         document.getElementById('applyFilters').addEventListener('click', () => this.applyFilters());
+        
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.applyFilters();
+                }
+            });
+        }
+        
+        const clearSearch = document.getElementById('clearSearch');
+        if (clearSearch) {
+            clearSearch.addEventListener('click', () => this.clearSearch());
+        }
         
         // Quick action buttons
         this.setupQuickActionButtons();
     }
 
     setupQuickActionButtons() {
-        // Add event listeners for quick action buttons
-        const quickActions = document.querySelectorAll('#dashboardSection .grid button');
+        const quickActions = document.querySelectorAll('#dashboardSection .quick-action');
         quickActions.forEach((button, index) => {
             button.addEventListener('click', () => {
                 const actions = ['searchJobs', 'internships', 'workshops', 'competitions'];
@@ -59,7 +87,6 @@ class CampusClimbApp {
     }
 
     handleQuickAction(action) {
-        // Handle quick action button clicks
         switch(action) {
             case 'searchJobs':
                 this.showOpportunitiesSection();
@@ -81,7 +108,6 @@ class CampusClimbApp {
     }
 
     filterByType(type) {
-        // Set the type filter and apply it
         const typeFilter = document.getElementById('typeFilter');
         if (typeFilter) {
             typeFilter.value = type;
@@ -89,17 +115,36 @@ class CampusClimbApp {
         }
     }
 
+    handleSearch(query) {
+        this.searchQuery = query.toLowerCase().trim();
+        const clearBtn = document.getElementById('clearSearch');
+        if (clearBtn) {
+            if (this.searchQuery) {
+                clearBtn.classList.add('visible');
+            } else {
+                clearBtn.classList.remove('visible');
+            }
+        }
+        this.applyFilters();
+    }
+
+    clearSearch() {
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.value = '';
+            this.handleSearch('');
+        }
+    }
+
     async checkAuthStatus() {
         const userEmail = localStorage.getItem('userEmail');
         if (userEmail) {
             try {
-                // Try with session first, then fallback to email parameter for serverless
                 let response = await fetch(`${this.apiBaseUrl}/auth/me`, {
                     method: 'GET',
-                    credentials: 'include' // Include cookies for session
+                    credentials: 'include'
                 });
                 
-                // If session doesn't work, try with email parameter (serverless fallback)
                 if (!response.ok) {
                     response = await fetch(`${this.apiBaseUrl}/auth/me?email=${encodeURIComponent(userEmail)}`, {
                         method: 'GET',
@@ -109,21 +154,17 @@ class CampusClimbApp {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    this.currentUser = data.user; // Backend returns {user: {...}}
-                    // Update stored user data
+                    this.currentUser = data.user;
                     localStorage.setItem('userData', JSON.stringify(data.user));
                     this.showDashboard();
                 } else {
-                    // If both fail, use stored user data as last resort
                     const userData = localStorage.getItem('userData');
                     if (userData) {
                         try {
                             this.currentUser = JSON.parse(userData);
                             this.showDashboard();
                             return;
-                        } catch (e) {
-                            // Invalid stored data
-                        }
+                        } catch (e) {}
                     }
                     localStorage.removeItem('userEmail');
                     localStorage.removeItem('userData');
@@ -131,16 +172,13 @@ class CampusClimbApp {
                 }
             } catch (error) {
                 console.error('Error checking auth status:', error);
-                // Fallback to stored user data
                 const userData = localStorage.getItem('userData');
                 if (userData) {
                     try {
                         this.currentUser = JSON.parse(userData);
                         this.showDashboard();
                         return;
-                    } catch (e) {
-                        // Invalid stored data
-                    }
+                    } catch (e) {}
                 }
                 localStorage.removeItem('userEmail');
                 localStorage.removeItem('userData');
@@ -152,18 +190,40 @@ class CampusClimbApp {
     }
 
     async loadOpportunities() {
+        this.showLoadingSkeleton();
         try {
             const response = await fetch(`${this.apiBaseUrl}/opportunities`);
             if (response.ok) {
                 this.opportunities = await response.json();
+                this.filteredOpportunities = [...this.opportunities];
                 this.updateDashboardStats();
                 this.renderOpportunitiesGrid();
             } else {
                 console.error('Failed to load opportunities');
+                this.showEmptyState('Failed to load opportunities. Please try again later.');
             }
         } catch (error) {
             console.error('Error loading opportunities:', error);
-            this.showMessage('Failed to load opportunities. Please try again later.', 'error');
+            this.showEmptyState('Failed to load opportunities. Please check your connection and try again.');
+        }
+    }
+
+    showLoadingSkeleton() {
+        const grid = document.getElementById('opportunitiesGrid');
+        if (!grid) return;
+        
+        grid.innerHTML = '';
+        for (let i = 0; i < 6; i++) {
+            const skeleton = document.createElement('div');
+            skeleton.className = 'card p-6';
+            skeleton.innerHTML = `
+                <div class="skeleton h-6 w-24 mb-4"></div>
+                <div class="skeleton h-8 w-full mb-3"></div>
+                <div class="skeleton h-6 w-3/4 mb-4"></div>
+                <div class="skeleton h-20 w-full mb-4"></div>
+                <div class="skeleton h-4 w-1/2"></div>
+            `;
+            grid.appendChild(skeleton);
         }
     }
 
@@ -190,12 +250,10 @@ class CampusClimbApp {
         const select = document.getElementById(selectId);
         if (!select) return;
 
-        // Clear existing options except the first one
         while (select.children.length > 1) {
             select.removeChild(select.lastChild);
         }
 
-        // Add new options
         options.forEach(option => {
             const optionElement = document.createElement('option');
             optionElement.value = option;
@@ -219,14 +277,35 @@ class CampusClimbApp {
         const categories = [...new Set(this.opportunities.map(opp => opp.category))];
         const activeCategories = categories.length;
 
-        // Update stats
-        const totalElement = document.getElementById('totalOpportunities');
-        const recentElement = document.getElementById('recentOpportunities');
-        const categoriesElement = document.getElementById('activeCategories');
+        // Animate numbers
+        this.animateNumber('totalOpportunities', totalOpportunities);
+        this.animateNumber('recentOpportunities', recentOpportunities);
+        this.animateNumber('activeCategories', activeCategories);
+    }
 
-        if (totalElement) totalElement.textContent = totalOpportunities;
-        if (recentElement) recentElement.textContent = recentOpportunities;
-        if (categoriesElement) categoriesElement.textContent = activeCategories;
+    animateNumber(elementId, targetValue) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        const startValue = parseInt(element.textContent) || 0;
+        const duration = 600;
+        const startTime = performance.now();
+        
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const currentValue = Math.floor(startValue + (targetValue - startValue) * progress);
+            
+            element.textContent = currentValue;
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                element.textContent = targetValue;
+            }
+        };
+        
+        requestAnimationFrame(animate);
     }
 
     renderOpportunitiesGrid() {
@@ -235,22 +314,12 @@ class CampusClimbApp {
 
         grid.innerHTML = '';
 
-        if (!this.opportunities || this.opportunities.length === 0) {
-            grid.innerHTML = `
-                <div class="col-span-full text-center py-12">
-                    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-semibold text-gray-900 mb-2">No opportunities found</h3>
-                    <p class="text-gray-600">Try adjusting your filters or check back later for new opportunities.</p>
-                </div>
-            `;
+        if (!this.filteredOpportunities || this.filteredOpportunities.length === 0) {
+            this.showEmptyState();
             return;
         }
 
-        this.opportunities.forEach(opportunity => {
+        this.filteredOpportunities.forEach(opportunity => {
             const card = this.createOpportunityCard(opportunity);
             grid.appendChild(card);
         });
@@ -258,69 +327,133 @@ class CampusClimbApp {
 
     createOpportunityCard(opportunity) {
         const card = document.createElement('div');
-        card.className = 'card p-6 hover:shadow-lg transition-all duration-300';
+        card.className = 'card opportunity-card p-6';
         card.dataset.opportunityId = opportunity.id;
         
-        const typeColors = {
-            'internship': 'bg-blue-100 text-blue-800',
-            'job': 'bg-green-100 text-green-800',
-            'workshop': 'bg-purple-100 text-purple-800',
-            'conference': 'bg-orange-100 text-orange-800',
-            'competition': 'bg-red-100 text-red-800'
+        const typeConfig = {
+            'internship': { 
+                color: 'bg-blue-100 text-blue-800 border-blue-200',
+                icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>'
+            },
+            'job': { 
+                color: 'bg-green-100 text-green-800 border-green-200',
+                icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2h8z"></path>'
+            },
+            'workshop': { 
+                color: 'bg-purple-100 text-purple-800 border-purple-200',
+                icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>'
+            },
+            'conference': { 
+                color: 'bg-orange-100 text-orange-800 border-orange-200',
+                icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>'
+            },
+            'competition': { 
+                color: 'bg-red-100 text-red-800 border-red-200',
+                icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>'
+            }
         };
 
-        const typeColor = typeColors[opportunity.type] || 'bg-gray-100 text-gray-800';
-        const dateField = opportunity.created_at || opportunity.date_posted; // Support both for backward compatibility
+        const config = typeConfig[opportunity.type] || { 
+            color: 'bg-gray-100 text-gray-800 border-gray-200',
+            icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>'
+        };
+
+        const dateField = opportunity.created_at || opportunity.date_posted;
         const formattedDate = dateField ? new Date(dateField).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
         }) : 'Date not available';
 
-        // Truncate description for initial view
-        const shortDescription = opportunity.description.length > 150 
-            ? opportunity.description.substring(0, 150) + '...' 
+        // Deadline handling
+        let deadlineBadge = '';
+        if (opportunity.deadline) {
+            const deadline = new Date(opportunity.deadline);
+            const today = new Date();
+            const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
+            
+            if (daysUntilDeadline < 0) {
+                deadlineBadge = '<span class="deadline-badge">Expired</span>';
+            } else if (daysUntilDeadline <= 7) {
+                deadlineBadge = `<span class="deadline-badge urgent">${daysUntilDeadline} days left</span>`;
+            } else if (daysUntilDeadline <= 30) {
+                deadlineBadge = `<span class="deadline-badge">${daysUntilDeadline} days left</span>`;
+            } else {
+                deadlineBadge = `<span class="deadline-badge" style="background: #f0fdf4; color: #166534;">Due ${deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>`;
+            }
+        }
+
+        const shortDescription = opportunity.description.length > 120 
+            ? opportunity.description.substring(0, 120) + '...' 
             : opportunity.description;
+
+        // Highlight search terms in description
+        const highlightedDescription = this.searchQuery 
+            ? this.highlightText(shortDescription, this.searchQuery)
+            : shortDescription;
 
         card.innerHTML = `
             <div class="flex justify-between items-start mb-4">
-                <span class="px-3 py-1 rounded-full text-xs font-semibold ${typeColor}">
+                <span class="opportunity-badge ${config.color} border">
+                    <svg class="opportunity-type-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        ${config.icon}
+                    </svg>
                     ${opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
                 </span>
-                <span class="text-sm text-gray-500">${formattedDate}</span>
+                <div class="flex flex-col items-end gap-1">
+                    ${deadlineBadge}
+                    <span class="text-xs text-gray-500">${formattedDate}</span>
+                </div>
             </div>
-            <h3 class="text-xl font-semibold text-gray-900 mb-2">${opportunity.title}</h3>
-            <div class="text-lg font-bold text-university-blue mb-3">${opportunity.company}</div>
-            <p class="text-gray-600 mb-4 opportunity-description" data-full-description="${opportunity.description}">${shortDescription}</p>
+            <h3 class="text-xl font-bold text-gray-900 mb-2">${this.highlightText(opportunity.title, this.searchQuery)}</h3>
+            <div class="text-lg font-bold text-university-blue mb-3">${this.highlightText(opportunity.company, this.searchQuery)}</div>
+            <p class="text-gray-600 mb-4 leading-relaxed opportunity-description">${highlightedDescription}</p>
             
-            <!-- Expanded content (hidden by default) -->
             <div class="expanded-content hidden">
                 <div class="border-t border-gray-200 pt-4 mb-4">
-                    <h4 class="text-lg font-semibold text-gray-900 mb-3">Full Description</h4>
-                    <p class="text-gray-700 leading-relaxed mb-6">${opportunity.description}</p>
+                    <h4 class="text-lg font-bold text-gray-900 mb-3">Full Description</h4>
+                    <p class="text-gray-700 leading-relaxed mb-6">${this.highlightText(opportunity.description, this.searchQuery)}</p>
                     
                     ${opportunity.requirements ? `
                         <div class="mb-6">
-                            <h4 class="text-lg font-semibold text-gray-900 mb-3">Requirements</h4>
+                            <h4 class="text-lg font-bold text-gray-900 mb-3">Requirements</h4>
                             <p class="text-gray-700 leading-relaxed">${opportunity.requirements}</p>
                         </div>
                     ` : ''}
                     
-                    <div class="flex items-center justify-between">
-                        <div class="text-sm text-gray-600">
-                            <span class="font-medium">Location:</span> ${opportunity.location}
+                    <div class="flex flex-wrap items-center gap-4 mb-4">
+                        <div class="flex items-center gap-2 text-sm text-gray-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <span class="font-medium">${opportunity.location}</span>
                         </div>
-                        <div class="text-sm text-gray-600">
-                            <span class="font-medium">Company:</span> ${opportunity.company}
+                        <div class="flex items-center gap-2 text-sm text-gray-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                            <span class="font-medium">${opportunity.company}</span>
                         </div>
+                        ${opportunity.salary ? `
+                            <div class="flex items-center gap-2 text-sm text-gray-600">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span class="font-medium">${opportunity.salary}</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
                 
                 ${opportunity.application_url ? `
                     <div class="text-center">
                         <a href="${opportunity.application_url}" target="_blank" rel="noopener noreferrer" 
-                           class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                            🚀 Apply Now
+                           class="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                            </svg>
+                            Apply Now
                         </a>
                     </div>
                 ` : `
@@ -330,63 +463,83 @@ class CampusClimbApp {
                 `}
             </div>
             
-            <div class="flex items-center justify-between">
-                <span class="text-sm font-medium text-gray-700">${opportunity.category}</span>
-                <button class="learn-more-btn text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors">
-                    Learn More →
+            <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                <span class="text-sm font-semibold text-gray-600 px-3 py-1 bg-gray-100 rounded-full">${opportunity.category}</span>
+                <button class="learn-more-btn text-blue-600 hover:text-blue-700 font-semibold text-sm transition-colors flex items-center gap-1">
+                    Learn More
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
                 </button>
             </div>
         `;
 
-        // Add event listener for Learn More button
         const learnMoreBtn = card.querySelector('.learn-more-btn');
         learnMoreBtn.addEventListener('click', () => this.toggleOpportunityExpansion(card));
 
         return card;
     }
 
-    applyFilters() {
-        const typeFilter = document.getElementById('typeFilter').value;
-        const categoryFilter = document.getElementById('categoryFilter').value;
-
-        let filteredOpportunities = this.opportunities;
-
-        if (typeFilter) {
-            filteredOpportunities = filteredOpportunities.filter(opp => opp.type === typeFilter);
-        }
-
-        if (categoryFilter) {
-            filteredOpportunities = filteredOpportunities.filter(opp => opp.category === categoryFilter);
-        }
-
-        this.renderFilteredOpportunities(filteredOpportunities);
+    highlightText(text, query) {
+        if (!query || !text) return text;
+        const regex = new RegExp(`(${query})`, 'gi');
+        return text.replace(regex, '<mark class="bg-yellow-200 px-1 rounded">$1</mark>');
     }
 
-    renderFilteredOpportunities(filteredOpportunities) {
+    applyFilters() {
+        const typeFilter = document.getElementById('typeFilter')?.value || '';
+        const categoryFilter = document.getElementById('categoryFilter')?.value || '';
+
+        let filtered = [...this.opportunities];
+
+        // Apply search
+        if (this.searchQuery) {
+            filtered = filtered.filter(opp => 
+                opp.title.toLowerCase().includes(this.searchQuery) ||
+                opp.company.toLowerCase().includes(this.searchQuery) ||
+                opp.description.toLowerCase().includes(this.searchQuery)
+            );
+        }
+
+        // Apply type filter
+        if (typeFilter) {
+            filtered = filtered.filter(opp => opp.type === typeFilter);
+        }
+
+        // Apply category filter
+        if (categoryFilter) {
+            filtered = filtered.filter(opp => opp.category === categoryFilter);
+        }
+
+        this.filteredOpportunities = filtered;
+        this.renderOpportunitiesGrid();
+    }
+
+    showEmptyState(message = null) {
         const grid = document.getElementById('opportunitiesGrid');
         if (!grid) return;
 
-        grid.innerHTML = '';
+        const defaultMessage = message || (this.searchQuery || document.getElementById('typeFilter')?.value || document.getElementById('categoryFilter')?.value
+            ? 'No matching opportunities found. Try adjusting your filters or search terms.'
+            : 'No opportunities available at the moment. Check back later for new opportunities.');
 
-        if (filteredOpportunities.length === 0) {
-            grid.innerHTML = `
-                <div class="col-span-full text-center py-12">
-                    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-semibold text-gray-900 mb-2">No matching opportunities</h3>
-                    <p class="text-gray-600">Try adjusting your filters to see more results.</p>
+        grid.innerHTML = `
+            <div class="col-span-full empty-state">
+                <div class="empty-state-icon">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
                 </div>
-            `;
-            return;
-        }
-
-        filteredOpportunities.forEach(opportunity => {
-            const card = this.createOpportunityCard(opportunity);
-            grid.appendChild(card);
-        });
+                <h3 class="text-xl font-bold text-gray-900 mb-2">No opportunities found</h3>
+                <p class="text-gray-600 mb-6 max-w-md mx-auto">${defaultMessage}</p>
+                ${this.searchQuery || document.getElementById('typeFilter')?.value || document.getElementById('categoryFilter')?.value ? `
+                    <button onclick="window.appInstance.clearSearch(); document.getElementById('typeFilter').value=''; document.getElementById('categoryFilter').value=''; window.appInstance.applyFilters();" 
+                            class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">
+                        Clear Filters
+                    </button>
+                ` : ''}
+            </div>
+        `;
     }
 
     showLoginModal() {
@@ -398,6 +551,11 @@ class CampusClimbApp {
         document.getElementById('loginModal').classList.add('hidden');
         document.getElementById('loginForm').reset();
         document.getElementById('loginMessage').textContent = '';
+        const submitBtn = document.getElementById('loginSubmitBtn');
+        if (submitBtn) {
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.disabled = false;
+        }
     }
 
     showRegisterModal() {
@@ -409,6 +567,24 @@ class CampusClimbApp {
         document.getElementById('registerModal').classList.add('hidden');
         document.getElementById('registerForm').reset();
         document.getElementById('registerMessage').textContent = '';
+        const submitBtn = document.getElementById('registerSubmitBtn');
+        if (submitBtn) {
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.disabled = false;
+        }
+    }
+
+    setButtonLoading(buttonId, loading) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+        
+        if (loading) {
+            button.classList.add('btn-loading');
+            button.disabled = true;
+        } else {
+            button.classList.remove('btn-loading');
+            button.disabled = false;
+        }
     }
 
     async handleLogin(e) {
@@ -421,8 +597,9 @@ class CampusClimbApp {
             return;
         }
 
+        this.setButtonLoading('loginSubmitBtn', true);
+
         try {
-            console.log('Attempting login with:', email);
             const response = await fetch(`${this.apiBaseUrl}/auth/login`, {
                 method: 'POST',
                 headers: {
@@ -432,24 +609,23 @@ class CampusClimbApp {
             });
 
             const data = await response.json();
-            console.log('Login response:', data);
 
             if (response.ok) {
-                console.log('Login successful, showing dashboard...');
                 this.currentUser = data.user;
                 localStorage.setItem('userEmail', email);
-                localStorage.setItem('userData', JSON.stringify(data.user)); // Store user data for fallback
+                localStorage.setItem('userData', JSON.stringify(data.user));
                 this.hideLoginModal();
                 this.showDashboard();
-                this.setupPeriodicRefresh(); // Start periodic refresh
+                this.setupPeriodicRefresh();
                 this.showMessage('Login successful! Welcome back.', 'success');
             } else {
-                console.log('Login failed:', data.error);
                 this.showMessage(data.error || 'Invalid email or password.', 'error', 'loginMessage');
             }
         } catch (error) {
             console.error('Login error:', error);
             this.showMessage('Login failed. Please check your connection and try again.', 'error', 'loginMessage');
+        } finally {
+            this.setButtonLoading('loginSubmitBtn', false);
         }
     }
 
@@ -470,6 +646,8 @@ class CampusClimbApp {
             return;
         }
 
+        this.setButtonLoading('registerSubmitBtn', true);
+
         try {
             const response = await fetch(`${this.apiBaseUrl}/auth/register`, {
                 method: 'POST',
@@ -482,7 +660,6 @@ class CampusClimbApp {
             const data = await response.json();
 
             if (response.ok) {
-                // Store user data after registration
                 if (data.user) {
                     localStorage.setItem('userEmail', data.user.email);
                     localStorage.setItem('userData', JSON.stringify(data.user));
@@ -495,12 +672,13 @@ class CampusClimbApp {
         } catch (error) {
             console.error('Registration error:', error);
             this.showMessage('Registration failed. Please check your connection and try again.', 'error', 'registerMessage');
+        } finally {
+            this.setButtonLoading('registerSubmitBtn', false);
         }
     }
 
     async logout() {
         try {
-            // Call backend logout endpoint
             await fetch(`${this.apiBaseUrl}/auth/logout`, {
                 method: 'POST',
                 credentials: 'include'
@@ -516,10 +694,6 @@ class CampusClimbApp {
     }
 
     showDashboard() {
-        console.log('showDashboard called');
-        console.log('Current user:', this.currentUser);
-        
-        // Hide all sections
         const welcomeSection = document.getElementById('welcomeSection');
         const opportunitiesSection = document.getElementById('opportunitiesSection');
         const dashboardSection = document.getElementById('dashboardSection');
@@ -528,71 +702,77 @@ class CampusClimbApp {
         if (opportunitiesSection) opportunitiesSection.classList.add('hidden');
         if (dashboardSection) dashboardSection.classList.remove('hidden');
         
-        // Setup periodic refresh for logged-in users
         if (this.currentUser) {
             this.setupPeriodicRefresh();
+            this.updateUserProfile();
         }
         
-        console.log('Sections updated');
-        
-        // Update navigation
         const loginBtn = document.getElementById('loginBtn');
         const registerBtn = document.getElementById('registerBtn');
         const logoutBtn = document.getElementById('logoutBtn');
+        const userProfile = document.getElementById('userProfile');
         
         if (loginBtn) loginBtn.classList.add('hidden');
         if (registerBtn) registerBtn.classList.add('hidden');
         if (logoutBtn) logoutBtn.classList.remove('hidden');
+        if (userProfile) userProfile.classList.remove('hidden');
         
-        console.log('Navigation updated');
-        
-        // Update user name
         if (this.currentUser) {
             const userNameElement = document.getElementById('userName');
             if (userNameElement) {
                 userNameElement.textContent = this.currentUser.first_name;
-                console.log('User name updated:', this.currentUser.first_name);
             }
         }
         
-        // Refresh data and update stats
         this.loadOpportunities();
         this.updateDashboardStats();
-        console.log('Dashboard shown successfully');
+    }
+
+    updateUserProfile() {
+        if (!this.currentUser) return;
+        
+        const userProfile = document.getElementById('userProfile');
+        const userNameNav = document.getElementById('userNameNav');
+        const userAvatar = document.getElementById('userAvatar');
+        
+        if (userProfile) userProfile.classList.remove('hidden');
+        if (userNameNav) {
+            userNameNav.textContent = `${this.currentUser.first_name} ${this.currentUser.last_name}`;
+        }
+        if (userAvatar) {
+            const initials = `${this.currentUser.first_name[0]}${this.currentUser.last_name[0]}`.toUpperCase();
+            userAvatar.textContent = initials;
+        }
     }
 
     showWelcomeSection() {
-        // Hide all sections
         document.getElementById('dashboardSection').classList.add('hidden');
         document.getElementById('opportunitiesSection').classList.add('hidden');
         document.getElementById('welcomeSection').classList.remove('hidden');
         
-        // Update navigation
         document.getElementById('logoutBtn').classList.add('hidden');
         document.getElementById('loginBtn').classList.remove('hidden');
         document.getElementById('registerBtn').classList.remove('hidden');
+        const userProfile = document.getElementById('userProfile');
+        if (userProfile) userProfile.classList.add('hidden');
     }
 
     showOpportunitiesSection() {
-        // Only show opportunities if user is logged in
         if (!this.currentUser) {
             this.showMessage('Please login to browse opportunities.', 'error');
             this.showLoginModal();
             return;
         }
 
-        // Hide all sections
         document.getElementById('welcomeSection').classList.add('hidden');
         document.getElementById('dashboardSection').classList.add('hidden');
         document.getElementById('opportunitiesSection').classList.remove('hidden');
         
-        // Refresh and render opportunities
         this.loadOpportunities();
         this.loadFilters();
     }
 
     ensureSingleSectionVisible() {
-        // Hide all sections first
         const sections = ['welcomeSection', 'dashboardSection', 'opportunitiesSection'];
         sections.forEach(sectionId => {
             const element = document.getElementById(sectionId);
@@ -601,7 +781,6 @@ class CampusClimbApp {
             }
         });
         
-        // Show welcome section by default
         const welcome = document.getElementById('welcomeSection');
         if (welcome) {
             welcome.classList.remove('hidden');
@@ -613,38 +792,42 @@ class CampusClimbApp {
         
         if (messageElement) {
             messageElement.textContent = message;
-            messageElement.className = `text-sm ${type === 'error' ? 'text-red-600' : type === 'success' ? 'text-green-600' : 'text-blue-600'}`;
+            messageElement.className = `text-sm font-medium ${type === 'error' ? 'text-red-600' : type === 'success' ? 'text-green-600' : 'text-blue-600'}`;
         } else {
-            // Create a temporary notification
             const notification = document.createElement('div');
-            notification.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-lg transition-all duration-300 ${
-                type === 'error' ? 'bg-red-500 text-white' : 
-                type === 'success' ? 'bg-green-500 text-white' : 
-                'bg-blue-500 text-white'
-            }`;
-            notification.textContent = message;
+            notification.className = `toast ${type}`;
+            
+            const icon = type === 'success' ? 
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' :
+                type === 'error' ?
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>' :
+                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+            
+            notification.innerHTML = `${icon}<span>${message}</span>`;
             
             document.body.appendChild(notification);
             
-            // Remove after 3 seconds
             setTimeout(() => {
                 notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
                 setTimeout(() => {
                     if (notification.parentNode) {
                         notification.parentNode.removeChild(notification);
                     }
                 }, 300);
-            }, 3000);
+            }, 4000);
         }
     }
 
     setupPeriodicRefresh() {
-        // Refresh data every 30 seconds for logged-in users
-        setInterval(() => {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+        this.refreshInterval = setInterval(() => {
             if (this.currentUser) {
                 this.loadOpportunities();
             }
-        }, 30000); // 30 seconds
+        }, 30000);
     }
 
     toggleOpportunityExpansion(card) {
@@ -653,17 +836,14 @@ class CampusClimbApp {
         const isExpanded = !expandedContent.classList.contains('hidden');
         
         if (isExpanded) {
-            // Collapse
             expandedContent.classList.add('hidden');
-            learnMoreBtn.textContent = 'Learn More →';
+            learnMoreBtn.innerHTML = 'Learn More <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>';
             card.classList.remove('expanded');
         } else {
-            // Expand
             expandedContent.classList.remove('hidden');
-            learnMoreBtn.textContent = 'Show Less ←';
+            learnMoreBtn.innerHTML = 'Show Less <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>';
             card.classList.add('expanded');
             
-            // Smooth scroll to show the expanded content
             setTimeout(() => {
                 card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 100);

@@ -15,7 +15,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="Campus Climb LOGO.png">
@@ -23,135 +23,569 @@
     <script>
         // Suppress Tailwind production warning in development
         console.warn = function() {};
-        
-        // Initialize app on DOM ready
-        document.addEventListener('DOMContentLoaded', function() {
-            // Let the main app handle section visibility
-            console.log('DOM loaded, app will handle section visibility');
-        });
     </script>
     <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        /* ============================================
+           TYPOGRAPHY & SPACING SYSTEM
+           ============================================ */
+        :root {
+            --spacing-xs: 0.25rem;    /* 4px */
+            --spacing-sm: 0.5rem;     /* 8px */
+            --spacing-md: 0.75rem;    /* 12px */
+            --spacing-lg: 1rem;        /* 16px */
+            --spacing-xl: 1.5rem;     /* 24px */
+            --spacing-2xl: 2rem;       /* 32px */
+            --spacing-3xl: 3rem;       /* 48px */
+            
+            /* University Colors */
+            --blue-primary: #1e40af;
+            --blue-light: #dbeafe;
+            --blue-dark: #1e3a8a;
+            --gold-accent: #d97706;
+            --gold-light: #fef3c7;
+            --gold-dark: #b45309;
+            --green-success: #059669;
+            --green-light: #d1fae5;
+            --green-dark: #047857;
         }
         
-        /* Logo styling */
+        body { 
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            line-height: 1.6;
+            letter-spacing: -0.01em;
+        }
+        
+        /* Typography Scale */
+        h1 { font-size: 2.5rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
+        h2 { font-size: 2rem; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
+        h3 { font-size: 1.5rem; font-weight: 600; line-height: 1.4; }
+        h4 { font-size: 1.25rem; font-weight: 600; line-height: 1.5; }
+        
+        /* ============================================
+           LOGO STYLING
+           ============================================ */
         .logo {
-            transition: all 0.3s ease-in-out;
-            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
         }
         
         .logo:hover {
-            transform: scale(1.05);
-            filter: drop-shadow(0 8px 15px rgba(0, 0, 0, 0.15));
+            transform: scale(1.03);
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.12));
         }
         
-        /* Ensure logo displays properly */
         img[alt="Campus Climb Logo"] {
             object-fit: contain;
             max-width: 100%;
             height: auto;
         }
         
-        /* Force proper logo sizing */
         #nav-logo {
-            height: 96px !important;
+            height: 48px !important;
             width: auto !important;
         }
         
         #welcome-logo {
-            height: 144px !important;
+            height: 120px !important;
             width: auto !important;
         }
         
         #dashboard-logo, #opportunities-logo {
-            height: 240px !important;
+            height: 160px !important;
             width: auto !important;
         }
         
-        /* Ensure proper section visibility */
-        .hidden {
-            display: none !important;
+        /* ============================================
+           NAVIGATION
+           ============================================ */
+        .nav-glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
         
-        /* Section visibility - let JavaScript handle this */
-        .hidden {
-            display: none !important;
+        .nav-button {
+            transition: all 0.2s ease;
+            position: relative;
         }
         
-        /* Modern button styles - Updated to match university branding */
+        .nav-button::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%) scaleX(0);
+            width: 80%;
+            height: 2px;
+            background: var(--blue-primary);
+            transition: transform 0.3s ease;
+        }
+        
+        .nav-button:hover::after {
+            transform: translateX(-50%) scaleX(1);
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            background: var(--blue-light);
+            color: var(--blue-primary);
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--blue-primary), var(--blue-dark));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+        
+        /* ============================================
+           BUTTONS
+           ============================================ */
         .btn-primary {
-            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
-            box-shadow: 0 4px 6px rgba(30, 64, 175, 0.25);
-            transition: all 0.3s ease;
+            background: linear-gradient(135deg, var(--blue-primary) 0%, var(--blue-dark) 100%);
+            box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .btn-primary:hover::before {
+            width: 300px;
+            height: 300px;
         }
         
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(30, 64, 175, 0.35);
-            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(30, 64, 175, 0.4);
+            background: linear-gradient(135deg, #1d4ed8 0%, var(--blue-primary) 100%);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0) scale(0.98);
         }
         
         .btn-secondary {
-            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             transition: all 0.3s ease;
         }
         
         .btn-secondary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: #cbd5e1;
+            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
         }
         
-        /* Card styles */
+        /* ============================================
+           CARDS
+           ============================================ */
         .card {
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--blue-primary), var(--green-success), var(--gold-accent));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.4s ease;
+        }
+        
+        .card:hover::before {
+            transform: scaleX(1);
         }
         
         .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.1);
+            transform: translateY(-8px) scale(1.01);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08);
+            border-color: rgba(30, 64, 175, 0.2);
         }
         
-        /* Modal styles */
+        /* ============================================
+           MODALS
+           ============================================ */
         .modal {
-            backdrop-filter: blur(8px);
-            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(12px) saturate(180%);
+            background: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s ease-out;
         }
         
         .modal-content {
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
         }
         
-        /* Input styles */
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #f1f5f9;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #64748b;
+        }
+        
+        .modal-close:hover {
+            background: #e2e8f0;
+            transform: rotate(90deg);
+            color: #1e293b;
+        }
+        
+        /* ============================================
+           INPUT FIELDS
+           ============================================ */
         .input-field {
             border: 2px solid #e2e8f0;
             border-radius: 12px;
             transition: all 0.3s ease;
-            background: #f8fafc;
+            background: #ffffff;
+            font-size: 0.9375rem;
         }
         
         .input-field:focus {
-            border-color: #1e40af;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+            border-color: var(--blue-primary);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(30, 64, 175, 0.1);
+            outline: none;
         }
         
-        /* Animation classes */
+        .input-field::placeholder {
+            color: #94a3b8;
+        }
+        
+        /* Floating Labels */
+        .input-group {
+            position: relative;
+        }
+        
+        .input-group label {
+            position: absolute;
+            top: 0.75rem;
+            left: 1rem;
+            color: #64748b;
+            font-size: 0.875rem;
+            font-weight: 500;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        
+        .input-group input:focus + label,
+        .input-group input:not(:placeholder-shown) + label {
+            top: -0.5rem;
+            left: 0.75rem;
+            font-size: 0.75rem;
+            color: var(--blue-primary);
+            background: white;
+            padding: 0 0.25rem;
+        }
+        
+        /* ============================================
+           STATS CARDS
+           ============================================ */
+        .stats-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stats-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100%;
+            background: linear-gradient(135deg, var(--blue-light) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .stats-card:hover::before {
+            opacity: 0.3;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+            border-color: rgba(30, 64, 175, 0.2);
+        }
+        
+        .stats-icon {
+            position: relative;
+            z-index: 1;
+            background: linear-gradient(135deg, var(--blue-primary), var(--blue-dark));
+            box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+        }
+        
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--blue-primary), var(--green-success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: countUp 0.6s ease-out;
+        }
+        
+        @keyframes countUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* ============================================
+           OPPORTUNITY CARDS
+           ============================================ */
+        .opportunity-card {
+            position: relative;
+        }
+        
+        .opportunity-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.875rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: capitalize;
+            letter-spacing: 0.025em;
+        }
+        
+        .opportunity-type-icon {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .deadline-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.625rem;
+            border-radius: 9999px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            background: #fef2f2;
+            color: #dc2626;
+        }
+        
+        .deadline-badge.urgent {
+            background: #fee2e2;
+            color: #991b1b;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* ============================================
+           SEARCH BAR
+           ============================================ */
+        .search-container {
+            position: relative;
+        }
+        
+        .search-input {
+            padding-left: 3rem;
+            padding-right: 3rem;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            pointer-events: none;
+        }
+        
+        .search-clear {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #e2e8f0;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .search-clear.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .search-clear:hover {
+            background: #cbd5e1;
+            transform: translateY(-50%) rotate(90deg);
+        }
+        
+        /* ============================================
+           LOADING STATES
+           ============================================ */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 8px;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .spinner {
+            border: 3px solid #e2e8f0;
+            border-top-color: var(--blue-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* ============================================
+           EMPTY STATES
+           ============================================ */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+        
+        .empty-state-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, var(--blue-light), var(--green-light));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--blue-primary);
+        }
+        
+        /* ============================================
+           TOAST NOTIFICATIONS
+           ============================================ */
+        .toast {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            animation: slideInRight 0.3s ease-out;
+            max-width: 400px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .toast.success {
+            background: linear-gradient(135deg, var(--green-success), var(--green-dark));
+            color: white;
+        }
+        
+        .toast.error {
+            background: linear-gradient(135deg, #dc2626, #991b1b);
+            color: white;
+        }
+        
+        .toast.info {
+            background: linear-gradient(135deg, var(--blue-primary), var(--blue-dark));
+            color: white;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* ============================================
+           ANIMATIONS
+           ============================================ */
         .fade-in {
             animation: fadeIn 0.6s ease-out;
         }
         
         .slide-up {
-            animation: slideUp 0.5s ease-out;
+            animation: slideUp 0.6s ease-out;
         }
         
         @keyframes fadeIn {
@@ -162,7 +596,7 @@
         @keyframes slideUp {
             from { 
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(30px);
             }
             to { 
                 opacity: 1;
@@ -170,45 +604,77 @@
             }
         }
         
-        /* Navigation styles */
-        .nav-glass {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        /* ============================================
+           UNIVERSITY COLORS
+           ============================================ */
+        .text-university-blue { color: var(--blue-primary); }
+        .text-university-gold { color: var(--gold-accent); }
+        .text-university-green { color: var(--green-success); }
+        
+        .bg-university-blue { background-color: var(--blue-primary); }
+        .bg-university-gold { background-color: var(--gold-accent); }
+        .bg-university-green { background-color: var(--green-success); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--blue-primary) 0%, var(--green-success) 50%, var(--gold-accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
-        /* Stats card gradients */
-        .stats-card {
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-            border: 1px solid rgba(0, 0, 0, 0.05);
+        /* Feature card colors */
+        .feature-blue {
+            background: linear-gradient(135deg, var(--blue-light) 0%, #bfdbfe 100%);
         }
         
-        .stats-card:hover {
-            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+        .feature-green {
+            background: linear-gradient(135deg, var(--green-light) 0%, #a7f3d0 100%);
         }
         
-        /* University brand colors */
-        .text-university-blue {
-            color: #1e40af;
+        .feature-gold {
+            background: linear-gradient(135deg, var(--gold-light) 0%, #fde68a 100%);
         }
         
-        .text-university-gold {
-            color: #d97706;
+        /* Quick action buttons */
+        .quick-action {
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
         
-        .text-university-green {
-            color: #059669;
+        .quick-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         
-        /* Expanded opportunity card styles */
-        .card.expanded {
-            transform: scale(1.02);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-            border-color: #1e40af;
+        .quick-action-blue:hover {
+            border-color: var(--blue-primary);
+            background: var(--blue-light);
+        }
+        
+        .quick-action-green:hover {
+            border-color: var(--green-success);
+            background: var(--green-light);
+        }
+        
+        .quick-action-purple:hover {
+            border-color: #7c3aed;
+            background: #ede9fe;
+        }
+        
+        .quick-action-gold:hover {
+            border-color: var(--gold-accent);
+            background: var(--gold-light);
+        }
+        
+        /* ============================================
+           UTILITIES
+           ============================================ */
+        .hidden {
+            display: none !important;
         }
         
         .expanded-content {
-            animation: expandContent 0.3s ease-out;
+            animation: expandContent 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         @keyframes expandContent {
@@ -219,99 +685,36 @@
             }
             to {
                 opacity: 1;
-                max-height: 1000px;
+                max-height: 2000px;
                 transform: translateY(0);
             }
         }
         
-        .learn-more-btn {
-            position: relative;
-            overflow: hidden;
+        .card.expanded {
+            transform: scale(1.02);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15);
+            border-color: var(--blue-primary);
         }
         
-        .learn-more-btn::before {
+        /* Loading button state */
+        .btn-loading {
+            position: relative;
+            color: transparent;
+            pointer-events: none;
+        }
+        
+        .btn-loading::after {
             content: '';
             position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(30, 64, 175, 0.1), transparent);
-            transition: left 0.5s;
-        }
-        
-                .learn-more-btn:hover::before {
-            left: 100%;
-        }
-        
-        .bg-university-blue {
-            background-color: #1e40af;
-        }
-        
-        .bg-university-gold {
-            background-color: #d97706;
-        }
-        
-        .bg-university-green {
-            background-color: #059669;
-        }
-        
-        /* Gradient text for main heading */
-        .gradient-text {
-            background: linear-gradient(135deg, #1e40af 0%, #059669 50%, #d97706 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        /* Feature card colors */
-        .feature-blue {
-            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        }
-        
-        .feature-green {
-            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-        }
-        
-        .feature-gold {
-            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        }
-        
-        /* Quick action button colors */
-        .quick-action-blue {
-            border-color: #3b82f6;
-        }
-        
-        .quick-action-blue:hover {
-            border-color: #1e40af;
-            background-color: #dbeafe;
-        }
-        
-        .quick-action-green {
-            border-color: #10b981;
-        }
-        
-        .quick-action-green:hover {
-            border-color: #059669;
-            background-color: #d1fae5;
-        }
-        
-        .quick-action-purple {
-            border-color: #8b5cf6;
-        }
-        
-        .quick-action-purple:hover {
-            border-color: #7c3aed;
-            background-color: #ede9fe;
-        }
-        
-        .quick-action-gold {
-            border-color: #f59e0b;
-        }
-        
-        .quick-action-gold:hover {
-            border-color: #d97706;
-            background-color: #fef3c7;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
     </style>
 </head>
@@ -319,77 +722,80 @@
     <!-- Navigation -->
     <nav class="nav-glass sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-20">
+            <div class="flex justify-between items-center h-16">
                 <div class="flex items-center">
-                    <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="h-24 w-auto logo" id="nav-logo">
+                    <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="logo" id="nav-logo">
                 </div>
-                <div class="flex items-center space-x-6">
-                    <button id="loginBtn" class="text-gray-700 hover:text-university-blue px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-blue-50">
+                <div class="flex items-center space-x-4">
+                    <div id="userProfile" class="user-profile hidden">
+                        <div class="user-avatar" id="userAvatar"></div>
+                        <span id="userNameNav"></span>
+                    </div>
+                    <button id="loginBtn" class="nav-button text-gray-700 hover:text-university-blue px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 hover:bg-blue-50">
                         Login
                     </button>
-                    <button id="registerBtn" class="btn-primary text-white px-6 py-2 rounded-lg text-sm font-medium">
+                    <button id="registerBtn" class="btn-primary text-white px-6 py-2 rounded-lg text-sm font-semibold">
                         Register
                     </button>
-                                               <button id="logoutBtn" class="text-gray-700 hover:text-red-600 px-4 py-2 rounded-lg text-sm font-medium hidden transition-all duration-300 hover:bg-red-50">
-                               Logout
-                           </button>
-                           
+                    <button id="logoutBtn" class="nav-button text-gray-700 hover:text-red-600 px-4 py-2 rounded-lg text-sm font-semibold hidden transition-all duration-300 hover:bg-red-50">
+                        Logout
+                    </button>
                 </div>
             </div>
         </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Welcome Section -->
-        <div id="welcomeSection" class="text-center py-16 fade-in">
-            <div class="flex justify-center mb-8">
-                <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="h-36 w-auto logo" id="welcome-logo">
+        <div id="welcomeSection" class="text-center py-12 fade-in">
+            <div class="flex justify-center mb-6">
+                <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="logo" id="welcome-logo">
             </div>
-            <h2 class="text-4xl font-bold mb-6 gradient-text">
+            <h1 class="text-5xl font-extrabold mb-4 gradient-text">
                 Welcome to Campus Climb
-            </h2>
-            <p class="text-xl text-gray-600 mb-6 font-medium">Your gateway to career opportunities at WVSU</p>
-            <p class="text-lg text-gray-500 mb-12 max-w-3xl mx-auto leading-relaxed">
+            </h1>
+            <p class="text-xl text-gray-600 mb-4 font-medium">Your gateway to career opportunities at WVSU</p>
+            <p class="text-lg text-gray-500 mb-10 max-w-3xl mx-auto leading-relaxed">
                 Connect with internships, jobs, conferences, workshops, and competitions specifically curated for WVSU students. 
                 Build your professional network and take the next step in your career journey.
             </p>
-            <div class="flex justify-center space-x-6">
-                <button id="loginWelcomeBtn" class="btn-primary text-white px-8 py-4 rounded-xl text-lg font-semibold">
+            <div class="flex justify-center space-x-4">
+                <button id="loginWelcomeBtn" class="btn-primary text-white px-10 py-4 rounded-xl text-lg font-semibold">
                     Get Started
                 </button>
             </div>
             
             <!-- Features Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
                 <div class="card p-8 text-center slide-up feature-blue">
-                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
                         <svg class="w-8 h-8 text-university-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2h8z"></path>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Career Opportunities</h3>
-                    <p class="text-gray-600">Discover internships, jobs, and professional development opportunities tailored for WVSU students.</p>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Career Opportunities</h3>
+                    <p class="text-gray-600 leading-relaxed">Discover internships, jobs, and professional development opportunities tailored for WVSU students.</p>
                 </div>
                 
                 <div class="card p-8 text-center slide-up feature-green" style="animation-delay: 0.1s;">
-                    <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div class="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
                         <svg class="w-8 h-8 text-university-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Network Building</h3>
-                    <p class="text-gray-600">Connect with industry professionals, alumni, and fellow students to expand your network.</p>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Network Building</h3>
+                    <p class="text-gray-600 leading-relaxed">Connect with industry professionals, alumni, and fellow students to expand your network.</p>
                 </div>
                 
                 <div class="card p-8 text-center slide-up feature-gold" style="animation-delay: 0.2s;">
-                    <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div class="w-16 h-16 bg-yellow-100 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
                         <svg class="w-8 h-8 text-university-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-gray-900 mb-3">Verified Opportunities</h3>
-                    <p class="text-gray-600">All opportunities are verified and curated specifically for WVSU students' success.</p>
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">Verified Opportunities</h3>
+                    <p class="text-gray-600 leading-relaxed">All opportunities are verified and curated specifically for WVSU students' success.</p>
                 </div>
             </div>
         </div>
@@ -397,30 +803,35 @@
         <!-- Login Modal -->
         <div id="loginModal" class="fixed inset-0 modal hidden z-50">
             <div class="flex items-center justify-center min-h-screen p-4">
-                <div class="modal-content p-8 max-w-md w-full mx-4">
+                <div class="modal-content p-8 max-w-md w-full mx-4 relative">
+                    <button class="modal-close" id="closeLoginModal" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                     <div class="text-center mb-6">
                         <h3 class="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h3>
                         <p class="text-gray-600">Sign in to access your opportunities</p>
                     </div>
                     <form id="loginForm">
                         <div class="mb-6">
-                            <label class="block text-sm font-semibold text-gray-700 mb-3">Email Address</label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
                             <input type="email" id="loginEmail" class="input-field w-full px-4 py-3 text-gray-900" placeholder="Enter your WVSU email" required>
                         </div>
-                        <div class="mb-8">
-                            <label class="block text-sm font-semibold text-gray-700 mb-3">Password</label>
+                        <div class="mb-6">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
                             <input type="password" id="loginPassword" class="input-field w-full px-4 py-3 text-gray-900" placeholder="Enter your password" required>
                         </div>
                         <div class="flex space-x-4">
-                            <button type="submit" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold flex-1">
+                            <button type="submit" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold flex-1" id="loginSubmitBtn">
                                 Sign In
                             </button>
-                            <button type="button" id="closeLoginModal" class="btn-secondary text-gray-700 px-6 py-3 rounded-xl font-semibold">
+                            <button type="button" id="closeLoginModalBtn" class="btn-secondary text-gray-700 px-6 py-3 rounded-xl font-semibold">
                                 Cancel
                             </button>
                         </div>
                     </form>
-                    <div id="loginMessage" class="mt-6 text-sm text-center"></div>
+                    <div id="loginMessage" class="mt-4 text-sm text-center"></div>
                 </div>
             </div>
         </div>
@@ -428,7 +839,12 @@
         <!-- Register Modal -->
         <div id="registerModal" class="fixed inset-0 modal hidden z-50">
             <div class="flex items-center justify-center min-h-screen p-4">
-                <div class="modal-content p-8 max-w-md w-full mx-4">
+                <div class="modal-content p-8 max-w-md w-full mx-4 relative">
+                    <button class="modal-close" id="closeRegisterModal" aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                     <div class="text-center mb-6">
                         <h3 class="text-2xl font-bold text-gray-900 mb-2">Join Campus Climb</h3>
                         <p class="text-gray-600">Create your account to get started</p>
@@ -436,99 +852,99 @@
                     <form id="registerForm">
                         <div class="grid grid-cols-2 gap-4 mb-6">
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-3">First Name</label>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
                                 <input type="text" id="registerFirstName" class="input-field w-full px-4 py-3 text-gray-900" placeholder="First name" required>
                             </div>
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-3">Last Name</label>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
                                 <input type="text" id="registerLastName" class="input-field w-full px-4 py-3 text-gray-900" placeholder="Last name" required>
                             </div>
                         </div>
                         <div class="mb-6">
-                            <label class="block text-sm font-semibold text-gray-700 mb-3">WVSU Email</label>
-                            <input type="email" id="registerEmail" class="input-field w-full px-4 py-3 text-gray-900" placeholder="your.email@wvsu.edu" required>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">WVSU Email</label>
+                            <input type="email" id="registerEmail" class="input-field w-full px-4 py-3 text-gray-900" placeholder="your.email@wvstateu.edu" required>
                         </div>
-                        <div class="mb-8">
-                            <label class="block text-sm font-semibold text-gray-700 mb-3">Password</label>
+                        <div class="mb-6">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
                             <input type="password" id="registerPassword" class="input-field w-full px-4 py-3 text-gray-900" placeholder="Create a strong password" required>
                         </div>
                         <div class="flex space-x-4">
-                            <button type="submit" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold flex-1">
+                            <button type="submit" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold flex-1" id="registerSubmitBtn">
                                 Create Account
                             </button>
-                            <button type="button" id="closeRegisterModal" class="btn-secondary text-gray-700 px-6 py-3 rounded-xl font-semibold">
+                            <button type="button" id="closeRegisterModalBtn" class="btn-secondary text-gray-700 px-6 py-3 rounded-xl font-semibold">
                                 Cancel
                             </button>
                         </div>
                     </form>
-                    <div id="registerMessage" class="mt-6 text-sm text-center"></div>
+                    <div id="registerMessage" class="mt-4 text-sm text-center"></div>
                 </div>
             </div>
         </div>
 
         <!-- Dashboard Section -->
         <div id="dashboardSection" class="hidden fade-in">
-            <div class="mb-12">
-                <div class="flex items-center justify-center mb-8">
-                    <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="h-60 w-auto logo" id="dashboard-logo">
+            <div class="mb-10">
+                <div class="flex items-center justify-center mb-6">
+                    <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="logo" id="dashboard-logo">
                 </div>
-                <h2 class="text-3xl font-bold text-gray-900 mb-4 text-center">Welcome back, <span id="userName" class="text-university-blue"></span>!</h2>
+                <h2 class="text-4xl font-bold text-gray-900 mb-3 text-center">Welcome back, <span id="userName" class="text-university-blue"></span>!</h2>
                 <p class="text-xl text-gray-600 text-center mb-8">Discover the latest opportunities for WVSU students</p>
                 
                 <!-- Action Buttons -->
-                <div class="flex justify-center space-x-6 mb-12">
-                    <button id="viewAllBtn" class="btn-primary text-white px-8 py-4 rounded-xl text-lg font-semibold">
+                <div class="flex justify-center space-x-4 mb-10">
+                    <button id="viewAllBtn" class="btn-primary text-white px-10 py-4 rounded-xl text-lg font-semibold">
                         Browse All Opportunities
                     </button>
                 </div>
             </div>
 
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-                <div class="stats-card rounded-2xl p-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <div class="stats-card rounded-2xl p-6">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                <svg class="w-6 h-6 text-university-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-14 h-14 stats-icon rounded-xl flex items-center justify-center">
+                                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2h8z"></path>
                                 </svg>
                             </div>
                         </div>
-                        <div class="ml-6">
-                            <p class="text-sm font-medium text-gray-500">Total Opportunities</p>
-                            <p class="text-3xl font-bold text-gray-900" id="totalOpportunities">-</p>
+                        <div class="ml-5">
+                            <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Opportunities</p>
+                            <p class="stats-number" id="totalOpportunities">-</p>
                         </div>
                     </div>
                 </div>
 
-                <div class="stats-card rounded-2xl p-8">
+                <div class="stats-card rounded-2xl p-6">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                                <svg class="w-6 h-6 text-university-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-14 h-14 stats-icon rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--green-success), var(--green-dark));">
+                                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
                             </div>
                         </div>
-                        <div class="ml-6">
-                            <p class="text-sm font-medium text-gray-500">Recent Additions</p>
-                            <p class="text-3xl font-bold text-gray-900" id="recentOpportunities">-</p>
+                        <div class="ml-5">
+                            <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Recent Additions</p>
+                            <p class="stats-number" id="recentOpportunities" style="background: linear-gradient(135deg, var(--green-success), var(--gold-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">-</p>
                         </div>
                     </div>
                 </div>
 
-                <div class="stats-card rounded-2xl p-8">
+                <div class="stats-card rounded-2xl p-6">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
-                                <svg class="w-6 h-6 text-university-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="w-14 h-14 stats-icon rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--gold-accent), var(--gold-dark));">
+                                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
                                 </svg>
                             </div>
                         </div>
-                        <div class="ml-6">
-                            <p class="text-sm font-medium text-gray-500">Active Categories</p>
-                            <p class="text-3xl font-bold text-gray-900" id="activeCategories">-</p>
+                        <div class="ml-5">
+                            <p class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Active Categories</p>
+                            <p class="stats-number" id="activeCategories" style="background: linear-gradient(135deg, var(--gold-accent), var(--blue-primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">-</p>
                         </div>
                     </div>
                 </div>
@@ -536,42 +952,42 @@
 
             <!-- Quick Actions -->
             <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-200">
-                <h3 class="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h3>
+                <h3 class="text-xl font-bold text-gray-900 mb-6">Quick Actions</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <button class="flex items-center p-4 rounded-xl border border-gray-200 quick-action-blue transition-all duration-300">
-                        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                            <svg class="w-5 h-5 text-university-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button class="quick-action quick-action-blue flex items-center p-5 rounded-xl border-2 border-gray-200 transition-all duration-300">
+                        <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mr-3">
+                            <svg class="w-6 h-6 text-university-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                             </svg>
                         </div>
-                        <span class="font-medium text-gray-700">Search Jobs</span>
+                        <span class="font-semibold text-gray-700">Search Jobs</span>
                     </button>
                     
-                    <button class="flex items-center p-4 rounded-xl border border-gray-200 quick-action-green transition-all duration-300">
-                        <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                            <svg class="w-5 h-5 text-university-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button class="quick-action quick-action-green flex items-center p-5 rounded-xl border-2 border-gray-200 transition-all duration-300">
+                        <div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center mr-3">
+                            <svg class="w-6 h-6 text-university-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
                             </svg>
                         </div>
-                        <span class="font-medium text-gray-700">Internships</span>
+                        <span class="font-semibold text-gray-700">Internships</span>
                     </button>
                     
-                    <button class="flex items-center p-4 rounded-xl border border-gray-200 quick-action-purple transition-all duration-300">
-                        <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button class="quick-action quick-action-purple flex items-center p-5 rounded-xl border-2 border-gray-200 transition-all duration-300">
+                        <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center mr-3">
+                            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                             </svg>
                         </div>
-                        <span class="font-medium text-gray-700">Workshops</span>
+                        <span class="font-semibold text-gray-700">Workshops</span>
                     </button>
                     
-                    <button class="flex items-center p-4 rounded-xl border border-gray-200 quick-action-gold transition-all duration-300">
-                        <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
-                            <svg class="w-5 h-5 text-university-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button class="quick-action quick-action-gold flex items-center p-5 rounded-xl border-2 border-gray-200 transition-all duration-300">
+                        <div class="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center mr-3">
+                            <svg class="w-6 h-6 text-university-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                             </svg>
                         </div>
-                        <span class="font-medium text-gray-700">Competitions</span>
+                        <span class="font-semibold text-gray-700">Competitions</span>
                     </button>
                 </div>
             </div>
@@ -579,26 +995,41 @@
 
         <!-- Opportunities Section -->
         <div id="opportunitiesSection" class="hidden fade-in">
-            <div class="mb-12">
-                <div class="flex items-center justify-center mb-8">
-                    <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="h-60 w-auto logo" id="opportunities-logo">
+            <div class="mb-10">
+                <div class="flex items-center justify-center mb-6">
+                    <img src="Campus Climb LOGO.png" alt="Campus Climb Logo" class="logo" id="opportunities-logo">
                 </div>
-                <h2 class="text-3xl font-bold text-gray-900 mb-4 text-center">All Opportunities</h2>
+                <h2 class="text-4xl font-bold text-gray-900 mb-3 text-center">All Opportunities</h2>
                 <p class="text-xl text-gray-600 text-center mb-8">Discover and filter opportunities that match your interests</p>
             </div>
 
+            <!-- Search Bar -->
+            <div class="mb-6">
+                <div class="search-container">
+                    <input type="text" id="searchInput" class="search-input input-field w-full px-12 py-4 text-gray-900" placeholder="Search opportunities by title, company, or description...">
+                    <svg class="search-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <button class="search-clear" id="clearSearch" aria-label="Clear search">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
             <!-- Filters -->
-            <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 mb-8">
-                <h3 class="text-xl font-semibold text-gray-900 mb-6">Filter Opportunities</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-8">
+                <h3 class="text-lg font-bold text-gray-900 mb-4">Filter Opportunities</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-3">Type</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Type</label>
                         <select id="typeFilter" class="input-field w-full px-4 py-3 text-gray-900">
                             <option value="">All Types</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-3">Category</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Category</label>
                         <select id="categoryFilter" class="input-field w-full px-4 py-3 text-gray-900">
                             <option value="">All Categories</option>
                         </select>
@@ -612,13 +1043,13 @@
             </div>
 
             <!-- Opportunities Grid -->
-            <div id="opportunitiesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div id="opportunitiesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Opportunities will be dynamically loaded here -->
             </div>
         </div>
     </main>
 
     <script src="js/config.js"></script>
-    <script src="js/app.js?v=1.0.16&nocache=1"></script>
+    <script src="js/app.js?v=2.0.0&nocache=1"></script>
 </body>
 </html>
