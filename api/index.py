@@ -238,6 +238,44 @@ app.init_db = init_db
 # Only check once per serverless function instance
 _db_initialized = False
 
+def check_and_add_is_admin_column():
+    """Check if is_admin column exists, add it if missing"""
+    try:
+        # Check if column exists
+        result = db.session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'users' 
+            AND column_name = 'is_admin'
+        """))
+        column_exists = result.fetchone() is not None
+        
+        if not column_exists:
+            print("is_admin column missing. Adding it...")
+            # Add the column
+            db.session.execute(text("""
+                ALTER TABLE public.users 
+                ADD COLUMN is_admin BOOLEAN DEFAULT FALSE NOT NULL
+            """))
+            # Create index
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_users_is_admin 
+                ON public.users(is_admin)
+            """))
+            db.session.commit()
+            print("is_admin column added successfully")
+            return True
+        else:
+            print("is_admin column already exists")
+            return False
+    except Exception as e:
+        print(f"Error checking/adding is_admin column: {e}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return False
+
 @app.before_request
 def ensure_db_initialized():
     """
@@ -264,6 +302,10 @@ def ensure_db_initialized():
                 print("Database tables created in serverless environment")
             else:
                 print("Database tables already exist (verified)")
+            
+            # Check and add is_admin column if missing
+            check_and_add_is_admin_column()
+            
             _db_initialized = True
         except Exception as e:
             print(f"Database initialization error: {e}")
@@ -422,17 +464,39 @@ def register():
         if not is_wvsu_email(email):
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
+        # Check and add is_admin column if missing (migration)
+        try:
+            check_and_add_is_admin_column()
+        except Exception as migration_error:
+            print(f"Migration check failed (non-critical): {migration_error}")
+
         # Uniqueness check
         try:
             existing_user = User.query.filter_by(email=email).first()
             if existing_user:
                 return jsonify({'error': 'Email already registered'}), 409
         except Exception as query_error:
-            print(f"Error checking existing user: {query_error}")
-            import traceback
-            traceback.print_exc()
-            db.session.rollback()
-            return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
+            # Check if it's the is_admin column error
+            error_str = str(query_error)
+            if 'is_admin' in error_str and 'does not exist' in error_str:
+                print("is_admin column missing. Attempting migration...")
+                try:
+                    check_and_add_is_admin_column()
+                    # Retry the query
+                    existing_user = User.query.filter_by(email=email).first()
+                    if existing_user:
+                        return jsonify({'error': 'Email already registered'}), 409
+                except Exception as retry_error:
+                    print(f"Migration failed: {retry_error}")
+                    import traceback
+                    traceback.print_exc()
+                    return jsonify({'error': 'Database migration required. Please contact support or run database/04_add_admin_column.sql manually.'}), 500
+            else:
+                print(f"Error checking existing user: {query_error}")
+                import traceback
+                traceback.print_exc()
+                db.session.rollback()
+                return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
         # Create user
         try:
@@ -491,11 +555,23 @@ def login():
         try:
             user = User.query.filter_by(email=email).first()
         except Exception as query_error:
-            print(f"Error querying user: {query_error}")
-            import traceback
-            traceback.print_exc()
-            db.session.rollback()
-            return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
+            # Check if it's the is_admin column error
+            error_str = str(query_error)
+            if 'is_admin' in error_str and 'does not exist' in error_str:
+                print("is_admin column missing. Attempting migration...")
+                try:
+                    check_and_add_is_admin_column()
+                    # Retry the query
+                    user = User.query.filter_by(email=email).first()
+                except Exception as retry_error:
+                    print(f"Migration failed: {retry_error}")
+                    return jsonify({'error': 'Database migration required. Please contact support.'}), 500
+            else:
+                print(f"Error querying user: {query_error}")
+                import traceback
+                traceback.print_exc()
+                db.session.rollback()
+                return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
