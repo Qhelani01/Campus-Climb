@@ -13,6 +13,8 @@ from functools import wraps
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_assistant import generate_application_advice
+from scheduler import fetch_all_opportunities, get_fetch_logs
+from fetcher_config import FetcherConfig
 
 app = Flask(__name__)
 # Configure CORS to allow requests from frontend
@@ -129,6 +131,12 @@ class Opportunity(db.Model):
     salary = db.Column(db.String(50))
     deadline = db.Column(db.Date, index=True)
     application_url = db.Column(db.String(500))
+    # Source tracking fields
+    source = db.Column(db.String(50), nullable=True, index=True)  # e.g., 'github_jobs', 'jooble', 'rss'
+    source_id = db.Column(db.String(200), nullable=True, index=True)  # Unique ID from source
+    source_url = db.Column(db.String(500), nullable=True)  # Original URL
+    last_fetched = db.Column(db.DateTime, nullable=True)  # When last updated from source
+    auto_fetched = db.Column(db.Boolean, default=False, index=True)  # Whether fetched automatically
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_deleted = db.Column(db.Boolean, default=False, index=True)  # Soft delete flag
@@ -151,6 +159,11 @@ class Opportunity(db.Model):
             'salary': self.salary,
             'deadline': self.deadline.isoformat() if self.deadline else None,
             'application_url': self.application_url,
+            'source': self.source,
+            'source_id': self.source_id,
+            'source_url': self.source_url,
+            'last_fetched': self.last_fetched.isoformat() if self.last_fetched else None,
+            'auto_fetched': self.auto_fetched,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -347,6 +360,75 @@ def check_and_add_user_profile_columns():
         db.session.rollback()
         return False
 
+def check_and_add_opportunity_source_columns():
+    """Check if opportunity source columns exist, add them if missing"""
+    try:
+        # Check which columns exist
+        result = db.session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'opportunities' 
+            AND column_name IN ('source', 'source_id', 'source_url', 'last_fetched', 'auto_fetched')
+        """))
+        existing_columns = {row[0] for row in result.fetchall()}
+        
+        columns_to_add = []
+        if 'source' not in existing_columns:
+            columns_to_add.append(('source', 'VARCHAR(50)'))
+        if 'source_id' not in existing_columns:
+            columns_to_add.append(('source_id', 'VARCHAR(200)'))
+        if 'source_url' not in existing_columns:
+            columns_to_add.append(('source_url', 'VARCHAR(500)'))
+        if 'last_fetched' not in existing_columns:
+            columns_to_add.append(('last_fetched', 'TIMESTAMP'))
+        if 'auto_fetched' not in existing_columns:
+            columns_to_add.append(('auto_fetched', 'BOOLEAN DEFAULT FALSE'))
+        
+        if columns_to_add:
+            print(f"Opportunity source columns missing. Adding: {', '.join([c[0] for c in columns_to_add])}...")
+            for column_name, column_type in columns_to_add:
+                db.session.execute(text(f"""
+                    ALTER TABLE public.opportunities 
+                    ADD COLUMN {column_name} {column_type}
+                """))
+            
+            # Create indexes
+            if 'source' not in existing_columns:
+                db.session.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_opportunities_source 
+                    ON public.opportunities(source)
+                """))
+            if 'source_id' not in existing_columns:
+                db.session.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_opportunities_source_id 
+                    ON public.opportunities(source_id)
+                """))
+            if 'auto_fetched' not in existing_columns:
+                db.session.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_opportunities_auto_fetched 
+                    ON public.opportunities(auto_fetched)
+                """))
+            
+            # Create composite index
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_opportunities_source_lookup 
+                ON public.opportunities(source, source_id)
+            """))
+            
+            db.session.commit()
+            print("Opportunity source columns added successfully")
+            return True
+        else:
+            print("Opportunity source columns already exist")
+            return False
+    except Exception as e:
+        print(f"Error checking/adding opportunity source columns: {e}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return False
+
 @app.before_request
 def ensure_db_initialized():
     """
@@ -379,6 +461,9 @@ def ensure_db_initialized():
             
             # Check and add user profile columns if missing
             check_and_add_user_profile_columns()
+            
+            # Check and add opportunity source columns if missing
+            check_and_add_opportunity_source_columns()
             
             _db_initialized = True
         except Exception as e:
@@ -636,6 +721,7 @@ def login():
         try:
             check_and_add_is_admin_column()
             check_and_add_user_profile_columns()
+            check_and_add_opportunity_source_columns()
         except Exception as migration_error:
             print(f"Migration check failed (non-critical): {migration_error}")
 
@@ -860,6 +946,89 @@ def admin_dashboard():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/fetch-opportunities', methods=['POST'])
+@admin_required
+def admin_fetch_opportunities():
+    """Manually trigger opportunity fetch from all sources"""
+    try:
+        print("Admin triggered opportunity fetch...")
+        results = fetch_all_opportunities()
+        return jsonify({
+            'message': 'Opportunities fetched successfully',
+            'results': results
+        })
+    except Exception as e:
+        print(f"Error in admin fetch opportunities: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to fetch opportunities: {str(e)}'}), 500
+
+@app.route('/api/admin/fetch-logs', methods=['GET'])
+@admin_required
+def admin_get_fetch_logs():
+    """Get fetch operation logs"""
+    try:
+        limit = int(request.args.get('limit', 50))
+        logs = get_fetch_logs(limit)
+        return jsonify({
+            'logs': logs,
+            'count': len(logs)
+        })
+    except Exception as e:
+        print(f"Error getting fetch logs: {e}")
+        return jsonify({'error': f'Failed to get fetch logs: {str(e)}'}), 500
+
+@app.route('/api/admin/fetchers/status', methods=['GET'])
+@admin_required
+def admin_get_fetcher_status():
+    """Get status of all fetchers"""
+    try:
+        enabled_fetchers = FetcherConfig.get_enabled_fetchers()
+        rss_feeds = FetcherConfig.get_rss_feeds()
+        
+        status = {
+            'enabled_fetchers': enabled_fetchers,
+            'rss_feeds': rss_feeds,
+            'api_keys_configured': {
+                'jooble': bool(FetcherConfig.JOOBLE_API_KEY),
+                'authentic_jobs': bool(FetcherConfig.AUTHENTIC_JOBS_API_KEY),
+                'meetup': bool(FetcherConfig.MEETUP_API_KEY)
+            },
+            'fetch_interval_hours': FetcherConfig.FETCH_INTERVAL_HOURS
+        }
+        
+        return jsonify(status)
+    except Exception as e:
+        print(f"Error getting fetcher status: {e}")
+        return jsonify({'error': f'Failed to get fetcher status: {str(e)}'}), 500
+
+@app.route('/api/cron/fetch-opportunities', methods=['GET', 'POST'])
+def cron_fetch_opportunities():
+    """
+    Cron endpoint for scheduled opportunity fetching.
+    Can be called by Vercel Cron or external cron service.
+    """
+    try:
+        # Optional: Add authentication for cron endpoint
+        # For Vercel Cron, you can use a secret header
+        cron_secret = os.environ.get('CRON_SECRET')
+        if cron_secret:
+            provided_secret = request.headers.get('X-Cron-Secret') or request.args.get('secret')
+            if provided_secret != cron_secret:
+                return jsonify({'error': 'Unauthorized'}), 401
+        
+        print("Cron job triggered: Fetching opportunities...")
+        results = fetch_all_opportunities()
+        return jsonify({
+            'message': 'Cron job completed',
+            'results': results
+        })
+    except Exception as e:
+        print(f"Error in cron fetch opportunities: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Cron job failed: {str(e)}'}), 500
 
 @app.route('/api/admin/promote', methods=['POST'])
 def admin_promote_user():

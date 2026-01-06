@@ -15,10 +15,15 @@
       "src": "/api/(.*)",
       "dest": "/api/index.py"
     },
-
     {
       "src": "/(.*)",
       "dest": "/frontend/$1"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/fetch-opportunities",
+      "schedule": "0 6 * * *"
     }
   ]
 }

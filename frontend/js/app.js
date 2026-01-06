@@ -125,6 +125,22 @@ class CampusClimbApp {
 
         // Dashboard buttons
         document.getElementById('viewAllBtn').addEventListener('click', () => this.showOpportunitiesSection());
+        
+        // Admin panel event listeners
+        const fetchOpportunitiesBtn = document.getElementById('fetchOpportunitiesBtn');
+        if (fetchOpportunitiesBtn) {
+            fetchOpportunitiesBtn.addEventListener('click', () => this.fetchOpportunities());
+        }
+        
+        const viewFetchStatusBtn = document.getElementById('viewFetchStatusBtn');
+        if (viewFetchStatusBtn) {
+            viewFetchStatusBtn.addEventListener('click', () => {
+                const fetchStatus = document.getElementById('fetchStatus');
+                if (fetchStatus) {
+                    fetchStatus.classList.toggle('hidden');
+                }
+            });
+        }
 
         // Filter controls
         document.getElementById('applyFilters').addEventListener('click', () => this.applyFilters());
@@ -870,6 +886,179 @@ class CampusClimbApp {
         
         this.loadOpportunities();
         this.updateDashboardStats();
+        
+        // Show admin panel if user is admin
+        if (this.currentUser && this.currentUser.is_admin) {
+            this.showAdminPanel();
+        } else {
+            this.hideAdminPanel();
+        }
+    }
+    
+    showAdminPanel() {
+        const adminPanel = document.getElementById('adminPanel');
+        if (adminPanel) {
+            adminPanel.classList.remove('hidden');
+            this.loadFetcherStatus();
+            this.loadFetchLogs();
+        }
+    }
+    
+    hideAdminPanel() {
+        const adminPanel = document.getElementById('adminPanel');
+        if (adminPanel) {
+            adminPanel.classList.add('hidden');
+        }
+    }
+    
+    async fetchOpportunities() {
+        const fetchBtn = document.getElementById('fetchOpportunitiesBtn');
+        const fetchLoading = document.getElementById('fetchLoading');
+        const fetchStatus = document.getElementById('fetchStatus');
+        const fetchStatusContent = document.getElementById('fetchStatusContent');
+        
+        if (fetchBtn) {
+            fetchBtn.disabled = true;
+            fetchBtn.textContent = 'Fetching...';
+        }
+        if (fetchLoading) fetchLoading.classList.remove('hidden');
+        if (fetchStatus) fetchStatus.classList.add('hidden');
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/fetch-opportunities`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const results = data.results || {};
+                
+                let statusHtml = '<div class="space-y-2">';
+                statusHtml += `<p class="font-semibold text-green-700">✓ Fetch completed successfully!</p>`;
+                statusHtml += `<p class="text-sm">Total fetched: ${results.total_fetched || 0}</p>`;
+                statusHtml += `<p class="text-sm">New opportunities: ${results.total_new || 0}</p>`;
+                statusHtml += `<p class="text-sm">Updated opportunities: ${results.total_updated || 0}</p>`;
+                
+                if (results.sources && Object.keys(results.sources).length > 0) {
+                    statusHtml += '<div class="mt-4 pt-4 border-t border-gray-300">';
+                    statusHtml += '<p class="font-semibold text-xs text-gray-600 mb-2">By Source:</p>';
+                    for (const [source, stats] of Object.entries(results.sources)) {
+                        statusHtml += `<p class="text-xs text-gray-600">${source}: ${stats.fetched || 0} fetched, ${stats.new || 0} new, ${stats.updated || 0} updated</p>`;
+                    }
+                    statusHtml += '</div>';
+                }
+                
+                statusHtml += '</div>';
+                
+                if (fetchStatusContent) fetchStatusContent.innerHTML = statusHtml;
+                if (fetchStatus) fetchStatus.classList.remove('hidden');
+                
+                // Reload opportunities
+                this.loadOpportunities();
+                this.updateDashboardStats();
+                
+                this.showMessage('Opportunities fetched successfully!', 'success');
+            } else {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to fetch opportunities');
+            }
+        } catch (error) {
+            console.error('Error fetching opportunities:', error);
+            if (fetchStatusContent) {
+                fetchStatusContent.innerHTML = `<p class="text-red-700">Error: ${error.message}</p>`;
+            }
+            if (fetchStatus) fetchStatus.classList.remove('hidden');
+            this.showMessage(`Failed to fetch opportunities: ${error.message}`, 'error');
+        } finally {
+            if (fetchBtn) {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = 'Fetch Opportunities Now';
+            }
+            if (fetchLoading) fetchLoading.classList.add('hidden');
+            
+            // Reload logs
+            this.loadFetchLogs();
+        }
+    }
+    
+    async loadFetchLogs() {
+        const logsContainer = document.getElementById('fetchLogsContainer');
+        if (!logsContainer) return;
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/fetch-logs?limit=10`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const logs = data.logs || [];
+                
+                if (logs.length === 0) {
+                    logsContainer.innerHTML = '<p class="text-sm text-gray-500">No fetch logs available</p>';
+                    return;
+                }
+                
+                let logsHtml = '<div class="space-y-2">';
+                logs.reverse().forEach(log => {
+                    logsHtml += `<div class="text-xs border-b border-gray-200 pb-2">`;
+                    logsHtml += `<p class="font-semibold text-gray-800">${log.source}</p>`;
+                    logsHtml += `<p class="text-gray-600">Fetched: ${log.fetched || 0} | New: ${log.new || 0} | Updated: ${log.updated || 0}`;
+                    if (log.errors > 0) {
+                        logsHtml += ` | <span class="text-red-600">Errors: ${log.errors}</span>`;
+                    }
+                    logsHtml += `</p>`;
+                    logsHtml += `<p class="text-gray-500 text-xs">${new Date(log.timestamp).toLocaleString()}</p>`;
+                    logsHtml += `</div>`;
+                });
+                logsHtml += '</div>';
+                
+                logsContainer.innerHTML = logsHtml;
+            } else {
+                logsContainer.innerHTML = '<p class="text-sm text-red-600">Failed to load fetch logs</p>';
+            }
+        } catch (error) {
+            console.error('Error loading fetch logs:', error);
+            logsContainer.innerHTML = '<p class="text-sm text-red-600">Error loading fetch logs</p>';
+        }
+    }
+    
+    async loadFetcherStatus() {
+        const statusContainer = document.getElementById('fetcherStatusContainer');
+        if (!statusContainer) return;
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/fetchers/status`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const status = await response.json();
+                
+                let statusHtml = '<div class="space-y-2 text-sm">';
+                statusHtml += `<p class="font-semibold text-gray-800">Enabled Fetchers:</p>`;
+                statusHtml += `<p class="text-gray-600">${(status.enabled_fetchers || []).join(', ') || 'All'}</p>`;
+                
+                statusHtml += `<p class="font-semibold text-gray-800 mt-4">API Keys Configured:</p>`;
+                const apiKeys = status.api_keys_configured || {};
+                statusHtml += `<p class="text-gray-600">Jooble: ${apiKeys.jooble ? '✓' : '✗'}</p>`;
+                statusHtml += `<p class="text-gray-600">Authentic Jobs: ${apiKeys.authentic_jobs ? '✓' : '✗'}</p>`;
+                statusHtml += `<p class="text-gray-600">Meetup: ${apiKeys.meetup ? '✓' : '✗'}</p>`;
+                
+                statusHtml += `<p class="font-semibold text-gray-800 mt-4">RSS Feeds:</p>`;
+                statusHtml += `<p class="text-gray-600 text-xs">${(status.rss_feeds || []).slice(0, 3).join(', ')}${(status.rss_feeds || []).length > 3 ? '...' : ''}</p>`;
+                
+                statusHtml += '</div>';
+                
+                statusContainer.innerHTML = statusHtml;
+            } else {
+                statusContainer.innerHTML = '<p class="text-sm text-red-600">Failed to load fetcher status</p>';
+            }
+        } catch (error) {
+            console.error('Error loading fetcher status:', error);
+            statusContainer.innerHTML = '<p class="text-sm text-red-600">Error loading fetcher status</p>';
+        }
     }
 
     showDashboard() {

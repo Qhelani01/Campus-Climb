@@ -988,6 +988,52 @@
                 </div>
             </div>
 
+            <!-- Admin Panel (only visible to admins) -->
+            <div id="adminPanel" class="hidden mb-10">
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">Admin Panel</h3>
+                    
+                    <!-- Fetch Opportunities Section -->
+                    <div class="mb-6">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-3">Fetch Opportunities</h4>
+                        <p class="text-sm text-gray-600 mb-4">Automatically fetch opportunities from multiple sources (GitHub Jobs, Stack Overflow, GraphQL Jobs, etc.)</p>
+                        <div class="flex items-center space-x-4">
+                            <button id="fetchOpportunitiesBtn" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">
+                                Fetch Opportunities Now
+                            </button>
+                            <button id="viewFetchStatusBtn" class="btn-secondary px-6 py-3 rounded-xl font-semibold">
+                                View Fetch Status
+                            </button>
+                        </div>
+                        <div id="fetchStatus" class="mt-4 hidden">
+                            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                <div id="fetchStatusContent" class="text-sm text-gray-700"></div>
+                            </div>
+                        </div>
+                        <div id="fetchLoading" class="hidden mt-4 text-center">
+                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                            <p class="mt-2 text-gray-600 text-sm">Fetching opportunities...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Fetch Logs Section -->
+                    <div class="mb-6">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-3">Recent Fetch Logs</h4>
+                        <div id="fetchLogsContainer" class="bg-gray-50 rounded-xl p-4 border border-gray-200 max-h-64 overflow-y-auto">
+                            <p class="text-sm text-gray-500">No fetch logs available</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Fetcher Status Section -->
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-3">Fetcher Status</h4>
+                        <div id="fetcherStatusContainer" class="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                            <p class="text-sm text-gray-500">Loading status...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                 <div class="stats-card rounded-2xl p-6">
