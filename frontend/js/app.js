@@ -609,13 +609,20 @@ class CampusClimbApp {
                 body: JSON.stringify({ email, password })
             });
 
+            // Clone response for potential error reading
+            const responseClone = response.clone();
             let data;
+
             try {
                 data = await response.json();
             } catch (jsonError) {
                 console.error('Failed to parse JSON response:', jsonError);
-                const text = await response.text();
-                console.error('Response text:', text);
+                try {
+                    const text = await responseClone.text();
+                    console.error('Response text:', text);
+                } catch (textError) {
+                    console.error('Could not read response text:', textError);
+                }
                 this.showMessage(`Server error: ${response.status} ${response.statusText}. Please check your connection.`, 'error', 'loginMessage');
                 return;
             }
@@ -673,13 +680,20 @@ class CampusClimbApp {
                 body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password })
             });
 
+            // Clone response for potential error reading
+            const responseClone = response.clone();
             let data;
+
             try {
                 data = await response.json();
             } catch (jsonError) {
                 console.error('Failed to parse JSON response:', jsonError);
-                const text = await response.text();
-                console.error('Response text:', text);
+                try {
+                    const text = await responseClone.text();
+                    console.error('Response text:', text);
+                } catch (textError) {
+                    console.error('Could not read response text:', textError);
+                }
                 this.showMessage(`Server error: ${response.status} ${response.statusText}. Please check your connection.`, 'error', 'registerMessage');
                 return;
             }
