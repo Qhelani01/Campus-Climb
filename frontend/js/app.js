@@ -7,6 +7,8 @@ class CampusClimbApp {
         this.filteredOpportunities = [];
         this.searchQuery = '';
         this.initialized = false;
+        this.currentRoute = null;
+        this.isNavigating = false; // Flag to prevent recursive navigation
         this.init();
     }
 
@@ -14,14 +16,71 @@ class CampusClimbApp {
         if (this.initialized) return;
         
         this.setupEventListeners();
+        this.setupRouting();
         this.loadOpportunities();
         this.loadFilters();
-        this.checkAuthStatus();
+        
+        // Check auth status first, then handle routing
+        this.checkAuthStatus().then(() => {
+            // Handle initial route after auth check completes
+            this.handleRouteChange();
+        });
         
         // Ensure only one section is visible initially
         this.ensureSingleSectionVisible();
         
         this.initialized = true;
+    }
+
+    setupRouting() {
+        // Listen for browser back/forward button
+        window.addEventListener('popstate', (e) => {
+            this.handleRouteChange();
+        });
+    }
+
+    handleRouteChange() {
+        const hash = window.location.hash.slice(1) || 'welcome';
+        this.navigateToRoute(hash, false); // false = don't push to history (already in history)
+    }
+
+    navigateToRoute(route, pushState = true) {
+        if (pushState && this.currentRoute !== route) {
+            window.history.pushState({ route }, '', `#${route}`);
+        }
+        this.currentRoute = route;
+        this.isNavigating = true;
+
+        switch(route) {
+            case 'dashboard':
+                if (this.currentUser) {
+                    this.showDashboardInternal();
+                } else {
+                    this.showWelcomeSectionInternal();
+                    this.currentRoute = 'welcome';
+                    if (pushState) {
+                        window.history.replaceState({ route: 'welcome' }, '', '#welcome');
+                    }
+                }
+                break;
+            case 'opportunities':
+                if (this.currentUser) {
+                    this.showOpportunitiesSectionInternal();
+                } else {
+                    this.showWelcomeSectionInternal();
+                    this.currentRoute = 'welcome';
+                    if (pushState) {
+                        window.history.replaceState({ route: 'welcome' }, '', '#welcome');
+                    }
+                }
+                break;
+            case 'welcome':
+            default:
+                this.showWelcomeSectionInternal();
+                break;
+        }
+        
+        this.isNavigating = false;
     }
 
     setupEventListeners() {
@@ -156,19 +215,17 @@ class CampusClimbApp {
                     const data = await response.json();
                     this.currentUser = data.user;
                     localStorage.setItem('userData', JSON.stringify(data.user));
-                    this.showDashboard();
                 } else {
                     const userData = localStorage.getItem('userData');
                     if (userData) {
                         try {
                             this.currentUser = JSON.parse(userData);
-                            this.showDashboard();
                             return;
                         } catch (e) {}
                     }
                     localStorage.removeItem('userEmail');
                     localStorage.removeItem('userData');
-                    this.showWelcomeSection();
+                    this.currentUser = null;
                 }
             } catch (error) {
                 console.error('Error checking auth status:', error);
@@ -176,16 +233,15 @@ class CampusClimbApp {
                 if (userData) {
                     try {
                         this.currentUser = JSON.parse(userData);
-                        this.showDashboard();
                         return;
                     } catch (e) {}
                 }
                 localStorage.removeItem('userEmail');
                 localStorage.removeItem('userData');
-                this.showWelcomeSection();
+                this.currentUser = null;
             }
         } else {
-            this.showWelcomeSection();
+            this.currentUser = null;
         }
     }
 
@@ -755,7 +811,7 @@ class CampusClimbApp {
         this.showMessage('Logged out successfully!', 'success');
     }
 
-    showDashboard() {
+    showDashboardInternal() {
         const welcomeSection = document.getElementById('welcomeSection');
         const opportunitiesSection = document.getElementById('opportunitiesSection');
         const dashboardSection = document.getElementById('dashboardSection');
@@ -790,6 +846,14 @@ class CampusClimbApp {
         this.updateDashboardStats();
     }
 
+    showDashboard() {
+        if (!this.isNavigating) {
+            this.navigateToRoute('dashboard');
+        } else {
+            this.showDashboardInternal();
+        }
+    }
+
     updateUserProfile() {
         if (!this.currentUser) return;
         
@@ -807,7 +871,7 @@ class CampusClimbApp {
         }
     }
 
-    showWelcomeSection() {
+    showWelcomeSectionInternal() {
         document.getElementById('dashboardSection').classList.add('hidden');
         document.getElementById('opportunitiesSection').classList.add('hidden');
         document.getElementById('welcomeSection').classList.remove('hidden');
@@ -819,6 +883,23 @@ class CampusClimbApp {
         if (userProfile) userProfile.classList.add('hidden');
     }
 
+    showWelcomeSection() {
+        if (!this.isNavigating) {
+            this.navigateToRoute('welcome');
+        } else {
+            this.showWelcomeSectionInternal();
+        }
+    }
+
+    showOpportunitiesSectionInternal() {
+        document.getElementById('welcomeSection').classList.add('hidden');
+        document.getElementById('dashboardSection').classList.add('hidden');
+        document.getElementById('opportunitiesSection').classList.remove('hidden');
+        
+        this.loadOpportunities();
+        this.loadFilters();
+    }
+
     showOpportunitiesSection() {
         if (!this.currentUser) {
             this.showMessage('Please login to browse opportunities.', 'error');
@@ -826,12 +907,11 @@ class CampusClimbApp {
             return;
         }
 
-        document.getElementById('welcomeSection').classList.add('hidden');
-        document.getElementById('dashboardSection').classList.add('hidden');
-        document.getElementById('opportunitiesSection').classList.remove('hidden');
-        
-        this.loadOpportunities();
-        this.loadFilters();
+        if (!this.isNavigating) {
+            this.navigateToRoute('opportunities');
+        } else {
+            this.showOpportunitiesSectionInternal();
+        }
     }
 
     ensureSingleSectionVisible() {
