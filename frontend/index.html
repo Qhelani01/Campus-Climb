@@ -242,6 +242,33 @@
         }
         
         /* ============================================
+           ADMIN TABS
+           ============================================ */
+        .admin-tab {
+            transition: all 0.2s ease;
+        }
+        
+        .admin-tab.active {
+            border-bottom-color: #2563eb !important;
+            color: #2563eb !important;
+        }
+        
+        .admin-tab-content {
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* ============================================
            MODALS
            ============================================ */
         .modal {
@@ -991,44 +1018,86 @@
             <!-- Admin Panel (only visible to admins) -->
             <div id="adminPanel" class="hidden mb-10">
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mb-6">
-                    <h3 class="text-xl font-bold text-gray-900 mb-4">Admin Panel</h3>
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-2xl font-bold text-gray-900">Admin Panel</h3>
+                        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">Administrator</span>
+                    </div>
                     
-                    <!-- Fetch Opportunities Section -->
-                    <div class="mb-6">
-                        <h4 class="text-lg font-semibold text-gray-800 mb-3">Fetch Opportunities</h4>
-                        <p class="text-sm text-gray-600 mb-4">Automatically fetch opportunities from multiple sources (GitHub Jobs, Stack Overflow, GraphQL Jobs, etc.)</p>
-                        <div class="flex items-center space-x-4">
-                            <button id="fetchOpportunitiesBtn" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">
-                                Fetch Opportunities Now
+                    <!-- Admin Tabs -->
+                    <div class="border-b border-gray-200 mb-6">
+                        <nav class="flex space-x-8" aria-label="Admin Tabs">
+                            <button id="adminTabFetch" class="admin-tab active py-4 px-1 border-b-2 border-blue-600 font-medium text-sm text-blue-600" onclick="app.switchAdminTab('fetch')">
+                                Fetch Management
                             </button>
-                            <button id="viewFetchStatusBtn" class="btn-secondary px-6 py-3 rounded-xl font-semibold">
-                                View Fetch Status
+                            <button id="adminTabOpportunities" class="admin-tab py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300" onclick="app.switchAdminTab('opportunities')">
+                                Opportunities
                             </button>
-                        </div>
-                        <div id="fetchStatus" class="mt-4 hidden">
-                            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                                <div id="fetchStatusContent" class="text-sm text-gray-700"></div>
+                            <button id="adminTabUsers" class="admin-tab py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300" onclick="app.switchAdminTab('users')">
+                                Users
+                            </button>
+                        </nav>
+                    </div>
+                    
+                    <!-- Fetch Management Tab -->
+                    <div id="adminTabContentFetch" class="admin-tab-content">
+                        <!-- Fetch Opportunities Section -->
+                        <div class="mb-6">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-3">Fetch Opportunities</h4>
+                            <p class="text-sm text-gray-600 mb-4">Automatically fetch opportunities from multiple sources (GitHub Jobs, Stack Overflow, GraphQL Jobs, etc.)</p>
+                            <div class="flex items-center space-x-4">
+                                <button id="fetchOpportunitiesBtn" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">
+                                    Fetch Opportunities Now
+                                </button>
+                                <button id="viewFetchStatusBtn" class="btn-secondary px-6 py-3 rounded-xl font-semibold">
+                                    View Fetch Status
+                                </button>
+                            </div>
+                            <div id="fetchStatus" class="mt-4 hidden">
+                                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                    <div id="fetchStatusContent" class="text-sm text-gray-700"></div>
+                                </div>
+                            </div>
+                            <div id="fetchLoading" class="hidden mt-4 text-center">
+                                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                <p class="mt-2 text-gray-600 text-sm">Fetching opportunities...</p>
                             </div>
                         </div>
-                        <div id="fetchLoading" class="hidden mt-4 text-center">
-                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                            <p class="mt-2 text-gray-600 text-sm">Fetching opportunities...</p>
+                        
+                        <!-- Fetch Logs Section -->
+                        <div class="mb-6">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-3">Recent Fetch Logs</h4>
+                            <div id="fetchLogsContainer" class="bg-gray-50 rounded-xl p-4 border border-gray-200 max-h-64 overflow-y-auto">
+                                <p class="text-sm text-gray-500">No fetch logs available</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Fetcher Status Section -->
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-800 mb-3">Fetcher Status</h4>
+                            <div id="fetcherStatusContainer" class="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                <p class="text-sm text-gray-500">Loading status...</p>
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- Fetch Logs Section -->
-                    <div class="mb-6">
-                        <h4 class="text-lg font-semibold text-gray-800 mb-3">Recent Fetch Logs</h4>
-                        <div id="fetchLogsContainer" class="bg-gray-50 rounded-xl p-4 border border-gray-200 max-h-64 overflow-y-auto">
-                            <p class="text-sm text-gray-500">No fetch logs available</p>
+                    <!-- Opportunities Management Tab -->
+                    <div id="adminTabContentOpportunities" class="admin-tab-content hidden">
+                        <div class="mb-4 flex justify-between items-center">
+                            <h4 class="text-lg font-semibold text-gray-800">All Opportunities</h4>
+                            <button id="createOpportunityBtn" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                + Create Opportunity
+                            </button>
+                        </div>
+                        <div id="adminOpportunitiesContainer" class="space-y-4">
+                            <p class="text-sm text-gray-500">Loading opportunities...</p>
                         </div>
                     </div>
                     
-                    <!-- Fetcher Status Section -->
-                    <div>
-                        <h4 class="text-lg font-semibold text-gray-800 mb-3">Fetcher Status</h4>
-                        <div id="fetcherStatusContainer" class="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                            <p class="text-sm text-gray-500">Loading status...</p>
+                    <!-- Users Management Tab -->
+                    <div id="adminTabContentUsers" class="admin-tab-content hidden">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">All Users</h4>
+                        <div id="adminUsersContainer" class="space-y-4">
+                            <p class="text-sm text-gray-500">Loading users...</p>
                         </div>
                     </div>
                 </div>
@@ -1183,6 +1252,80 @@
             </div>
         </div>
     </main>
+
+    <!-- Create Opportunity Modal -->
+    <div id="createOpportunityModal" class="modal hidden">
+        <div class="modal-content max-w-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900">Create New Opportunity</h3>
+                <button onclick="app.closeCreateOpportunityModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <form id="createOpportunityForm" onsubmit="app.handleCreateOpportunity(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Title *</label>
+                        <input type="text" id="oppTitle" required class="input-field w-full px-4 py-3" placeholder="e.g., Software Engineering Intern">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Company *</label>
+                            <input type="text" id="oppCompany" required class="input-field w-full px-4 py-3" placeholder="Company Name">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Location *</label>
+                            <input type="text" id="oppLocation" required class="input-field w-full px-4 py-3" placeholder="e.g., Remote, New York, NY">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Type *</label>
+                            <select id="oppType" required class="input-field w-full px-4 py-3">
+                                <option value="">Select Type</option>
+                                <option value="job">Job</option>
+                                <option value="internship">Internship</option>
+                                <option value="workshop">Workshop</option>
+                                <option value="conference">Conference</option>
+                                <option value="competition">Competition</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Category *</label>
+                            <select id="oppCategory" required class="input-field w-full px-4 py-3">
+                                <option value="">Select Category</option>
+                                <option value="Technology">Technology</option>
+                                <option value="Business">Business</option>
+                                <option value="Design">Design</option>
+                                <option value="Education">Education</option>
+                                <option value="General">General</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Description *</label>
+                        <textarea id="oppDescription" required rows="4" class="input-field w-full px-4 py-3" placeholder="Detailed description of the opportunity"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Requirements</label>
+                        <textarea id="oppRequirements" rows="3" class="input-field w-full px-4 py-3" placeholder="Required skills, qualifications, etc."></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Salary</label>
+                            <input type="text" id="oppSalary" class="input-field w-full px-4 py-3" placeholder="e.g., $50,000 - $70,000">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Application URL</label>
+                            <input type="url" id="oppApplicationUrl" class="input-field w-full px-4 py-3" placeholder="https://...">
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-4 mt-6">
+                    <button type="button" onclick="app.closeCreateOpportunityModal()" class="btn-secondary px-6 py-3 rounded-xl font-semibold">Cancel</button>
+                    <button type="submit" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">Create Opportunity</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="js/config.js"></script>
     <script src="js/app.js?v=2.0.0&nocache=1"></script>

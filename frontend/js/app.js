@@ -1060,6 +1060,301 @@ class CampusClimbApp {
             statusContainer.innerHTML = '<p class="text-sm text-red-600">Error loading fetcher status</p>';
         }
     }
+    
+    switchAdminTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll('.admin-tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Remove active class from all tabs
+        document.querySelectorAll('.admin-tab').forEach(tab => {
+            tab.classList.remove('active', 'border-blue-600', 'text-blue-600');
+            tab.classList.add('border-transparent', 'text-gray-500');
+        });
+        
+        // Show selected tab content
+        const contentId = `adminTabContent${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`;
+        const content = document.getElementById(contentId);
+        if (content) {
+            content.classList.remove('hidden');
+        }
+        
+        // Activate selected tab
+        const tabId = `adminTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`;
+        const tab = document.getElementById(tabId);
+        if (tab) {
+            tab.classList.add('active', 'border-blue-600', 'text-blue-600');
+            tab.classList.remove('border-transparent', 'text-gray-500');
+        }
+        
+        // Load data for the selected tab
+        if (tabName === 'opportunities') {
+            this.loadAdminOpportunities();
+        } else if (tabName === 'users') {
+            this.loadAdminUsers();
+        }
+    }
+    
+    async loadAdminOpportunities() {
+        const container = document.getElementById('adminOpportunitiesContainer');
+        if (!container) return;
+        
+        container.innerHTML = '<p class="text-sm text-gray-500">Loading opportunities...</p>';
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const opportunities = await response.json();
+                
+                if (opportunities.length === 0) {
+                    container.innerHTML = '<p class="text-sm text-gray-500">No opportunities found</p>';
+                    return;
+                }
+                
+                let html = '<div class="space-y-3">';
+                opportunities.forEach(opp => {
+                    const isDeleted = opp.is_deleted || false;
+                    html += `<div class="bg-gray-50 rounded-lg p-4 border ${isDeleted ? 'border-red-200 opacity-60' : 'border-gray-200'}">`;
+                    html += `<div class="flex justify-between items-start">`;
+                    html += `<div class="flex-1">`;
+                    html += `<div class="flex items-center gap-2 mb-2">`;
+                    html += `<h5 class="font-semibold text-gray-900">${this.escapeHtml(opp.title)}</h5>`;
+                    if (isDeleted) {
+                        html += `<span class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold">Deleted</span>`;
+                    }
+                    if (opp.auto_fetched) {
+                        html += `<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Auto-fetched</span>`;
+                    }
+                    html += `</div>`;
+                    html += `<p class="text-sm text-gray-600 mb-1"><span class="font-medium">Company:</span> ${this.escapeHtml(opp.company)} | <span class="font-medium">Location:</span> ${this.escapeHtml(opp.location)}</p>`;
+                    html += `<p class="text-sm text-gray-600 mb-1"><span class="font-medium">Type:</span> ${this.escapeHtml(opp.type)} | <span class="font-medium">Category:</span> ${this.escapeHtml(opp.category)}</p>`;
+                    html += `<p class="text-xs text-gray-500">Created: ${new Date(opp.created_at).toLocaleString()}</p>`;
+                    html += `</div>`;
+                    html += `<div class="flex gap-2">`;
+                    html += `<button onclick="app.editOpportunity(${opp.id})" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Edit</button>`;
+                    if (isDeleted) {
+                        html += `<button onclick="app.restoreOpportunity(${opp.id})" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">Restore</button>`;
+                    } else {
+                        html += `<button onclick="app.deleteOpportunity(${opp.id})" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">Delete</button>`;
+                    }
+                    html += `</div>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                });
+                html += '</div>';
+                
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p class="text-sm text-red-600">Failed to load opportunities</p>';
+            }
+        } catch (error) {
+            console.error('Error loading admin opportunities:', error);
+            container.innerHTML = '<p class="text-sm text-red-600">Error loading opportunities</p>';
+        }
+    }
+    
+    async loadAdminUsers() {
+        const container = document.getElementById('adminUsersContainer');
+        if (!container) return;
+        
+        container.innerHTML = '<p class="text-sm text-gray-500">Loading users...</p>';
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/users`, {
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const users = await response.json();
+                
+                if (users.length === 0) {
+                    container.innerHTML = '<p class="text-sm text-gray-500">No users found</p>';
+                    return;
+                }
+                
+                let html = '<div class="space-y-3">';
+                users.forEach(user => {
+                    html += `<div class="bg-gray-50 rounded-lg p-4 border border-gray-200">`;
+                    html += `<div class="flex justify-between items-start">`;
+                    html += `<div class="flex-1">`;
+                    html += `<div class="flex items-center gap-2 mb-2">`;
+                    html += `<h5 class="font-semibold text-gray-900">${this.escapeHtml(user.first_name)} ${this.escapeHtml(user.last_name)}</h5>`;
+                    if (user.is_admin) {
+                        html += `<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">Admin</span>`;
+                    }
+                    html += `</div>`;
+                    html += `<p class="text-sm text-gray-600 mb-1"><span class="font-medium">Email:</span> ${this.escapeHtml(user.email)}</p>`;
+                    html += `<p class="text-xs text-gray-500">Joined: ${new Date(user.created_at).toLocaleString()}</p>`;
+                    html += `</div>`;
+                    html += `<div class="flex gap-2">`;
+                    if (!user.is_admin) {
+                        html += `<button onclick="app.promoteToAdmin('${user.email}')" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Promote to Admin</button>`;
+                    }
+                    html += `</div>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                });
+                html += '</div>';
+                
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p class="text-sm text-red-600">Failed to load users</p>';
+            }
+        } catch (error) {
+            console.error('Error loading admin users:', error);
+            container.innerHTML = '<p class="text-sm text-red-600">Error loading users</p>';
+        }
+    }
+    
+    async deleteOpportunity(id) {
+        if (!confirm('Are you sure you want to delete this opportunity?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities/${id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                this.showMessage('Opportunity deleted successfully', 'success');
+                this.loadAdminOpportunities();
+                this.loadOpportunities();
+                this.updateDashboardStats();
+            } else {
+                const error = await response.json();
+                this.showMessage(`Failed to delete: ${error.error}`, 'error');
+            }
+        } catch (error) {
+            this.showMessage(`Error deleting opportunity: ${error.message}`, 'error');
+        }
+    }
+    
+    async restoreOpportunity(id) {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ is_deleted: false })
+            });
+            
+            if (response.ok) {
+                this.showMessage('Opportunity restored successfully', 'success');
+                this.loadAdminOpportunities();
+                this.loadOpportunities();
+                this.updateDashboardStats();
+            } else {
+                const error = await response.json();
+                this.showMessage(`Failed to restore: ${error.error}`, 'error');
+            }
+        } catch (error) {
+            this.showMessage(`Error restoring opportunity: ${error.message}`, 'error');
+        }
+    }
+    
+    editOpportunity(id) {
+        // TODO: Implement edit opportunity modal/form
+        this.showMessage('Edit functionality coming soon!', 'info');
+    }
+    
+    async promoteToAdmin(email) {
+        if (!confirm(`Are you sure you want to promote ${email} to admin?`)) {
+            return;
+        }
+        
+        const secretKey = prompt('Enter admin secret key:');
+        if (!secretKey) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/promote`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    email: email,
+                    secret_key: secretKey
+                })
+            });
+            
+            if (response.ok) {
+                this.showMessage('User promoted to admin successfully', 'success');
+                this.loadAdminUsers();
+            } else {
+                const error = await response.json();
+                this.showMessage(`Failed to promote: ${error.error}`, 'error');
+            }
+        } catch (error) {
+            this.showMessage(`Error promoting user: ${error.message}`, 'error');
+        }
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    showCreateOpportunityModal() {
+        const modal = document.getElementById('createOpportunityModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.getElementById('createOpportunityForm').reset();
+        }
+    }
+    
+    closeCreateOpportunityModal() {
+        const modal = document.getElementById('createOpportunityModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+    
+    async handleCreateOpportunity(event) {
+        event.preventDefault();
+        
+        const opportunityData = {
+            title: document.getElementById('oppTitle').value.trim(),
+            company: document.getElementById('oppCompany').value.trim(),
+            location: document.getElementById('oppLocation').value.trim(),
+            type: document.getElementById('oppType').value,
+            category: document.getElementById('oppCategory').value,
+            description: document.getElementById('oppDescription').value.trim(),
+            requirements: document.getElementById('oppRequirements').value.trim(),
+            salary: document.getElementById('oppSalary').value.trim(),
+            application_url: document.getElementById('oppApplicationUrl').value.trim()
+        };
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(opportunityData)
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.showMessage('Opportunity created successfully!', 'success');
+                this.closeCreateOpportunityModal();
+                this.loadAdminOpportunities();
+                this.loadOpportunities();
+                this.updateDashboardStats();
+            } else {
+                const error = await response.json();
+                this.showMessage(`Failed to create: ${error.error}`, 'error');
+            }
+        } catch (error) {
+            this.showMessage(`Error creating opportunity: ${error.message}`, 'error');
+        }
+    }
 
     showDashboard() {
         if (!this.isNavigating) {

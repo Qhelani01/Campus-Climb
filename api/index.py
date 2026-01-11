@@ -874,9 +874,7 @@ def login():
 
         if not email or not password:
             return jsonify({'error': 'Email and password are required'}), 400
-        if not is_wvsu_email(email):
-            return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
-
+        
         # Check and add missing columns (migration)
         try:
             check_and_add_is_admin_column()
@@ -910,7 +908,15 @@ def login():
                 return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
         if not user:
+            # User doesn't exist - enforce WVSU email requirement
+            if not is_wvsu_email(email):
+                return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
             return jsonify({'error': 'Invalid credentials'}), 401
+        
+        # User exists - allow admin users regardless of email domain
+        # For non-admin users, enforce WVSU email requirement
+        if not user.is_admin and not is_wvsu_email(email):
+            return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
         try:
             if not user.check_password(password):
