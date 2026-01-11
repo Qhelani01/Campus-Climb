@@ -690,10 +690,8 @@ class CampusClimbApp {
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
 
-        if (!email.endsWith('@wvstateu.edu')) {
-            this.showMessage('Please use your WVSU email address (@wvstateu.edu).', 'error', 'loginMessage');
-            return;
-        }
+        // Email validation removed - backend handles it (allows admin users with any email)
+        // Non-admin users still require @wvstateu.edu email (enforced by backend)
 
         this.setButtonLoading('loginSubmitBtn', true);
 
