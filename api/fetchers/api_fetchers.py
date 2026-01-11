@@ -46,10 +46,17 @@ class GraphQLJobsFetcher(OpportunityFetcher):
             }
             """
             
+            headers = {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
             response = requests.post(
                 self.api_url,
                 json={'query': query},
-                timeout=30
+                headers=headers,
+                timeout=30,
+                verify=True
             )
             response.raise_for_status()
             
@@ -71,9 +78,16 @@ class GraphQLJobsFetcher(OpportunityFetcher):
                     continue
             
             self.fetch_count = len(opportunities)
+            print(f"Successfully fetched {len(opportunities)} opportunities from {self.source_name}")
             return opportunities
+        except requests.exceptions.RequestException as e:
+            print(f"Network error fetching from GraphQL Jobs API: {e}")
+            self.error_count += 1
+            return []
         except Exception as e:
             print(f"Error fetching from GraphQL Jobs API: {e}")
+            import traceback
+            traceback.print_exc()
             self.error_count += 1
             return []
     

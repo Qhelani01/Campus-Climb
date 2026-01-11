@@ -17,9 +17,13 @@ class FetcherConfig:
     RSS_FEEDS = os.environ.get('RSS_FEEDS', '').split(',') if os.environ.get('RSS_FEEDS') else []
     
     # Default RSS feeds (no auth needed)
+    # Note: GitHub Jobs was shut down, Stack Overflow blocks bots
+    # Using Reddit feeds which are more accessible
     DEFAULT_RSS_FEEDS = [
-        'https://jobs.github.com/positions.atom',
-        'https://stackoverflow.com/jobs/feed',
+        'https://stackoverflow.com/jobs/feed',  # May be blocked, but worth trying
+        'https://www.reddit.com/r/forhire/.rss',  # Reddit forhire subreddit
+        'https://www.reddit.com/r/jobbit/.rss',   # Reddit job board
+        'https://www.reddit.com/r/remotejs/.rss', # Remote JS jobs
     ]
     
     # Enabled fetchers (comma-separated list)
@@ -27,10 +31,12 @@ class FetcherConfig:
     ENABLED_FETCHERS = [f.strip() for f in ENABLED_FETCHERS_STR.split(',') if f.strip()] if ENABLED_FETCHERS_STR else []
     
     # Default enabled fetchers (all free, no auth needed)
+    # Note: GitHub Jobs was shut down, Stack Overflow blocks bots
+    # Reddit feeds are more accessible
     DEFAULT_ENABLED_FETCHERS = [
-        'graphql_jobs',
-        'github_jobs_rss',
-        'stackoverflow_jobs_rss',
+        'stackoverflow_jobs_rss',  # Try it, but may be blocked
+        # 'graphql_jobs',  # Domain doesn't exist
+        # 'github_jobs_rss',  # GitHub Jobs was shut down
     ]
     
     # Fetch interval (hours)

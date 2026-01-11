@@ -4,7 +4,10 @@ Handles interactions with Ollama LLM for application assistance.
 """
 import requests
 import json
-from api.config import Config
+try:
+    from api.config import Config
+except ImportError:
+    from config import Config
 
 def build_prompt(opportunity, user_info, request_type):
     """
