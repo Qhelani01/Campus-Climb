@@ -892,6 +892,16 @@ def register():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     """Authenticate existing user. Only WVSU emails allowed. No mock users."""
+    # #region agent log
+    import json
+    import time
+    try:
+        with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D","location":"index.py:893","message":"LOGIN_ENDPOINT_ENTRY","data":{"timestamp":time.time()*1000},"timestamp":int(time.time()*1000)}) + '\n')
+            f.flush()
+    except Exception as log_err:
+        print(f"DEBUG LOG ERROR: {log_err}")
+    # #endregion
     try:
         # Ensure database connection
         try:
@@ -905,6 +915,15 @@ def login():
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()
         password = data.get('password') or ''
+        # #region agent log
+        try:
+            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,F","location":"index.py:918","message":"LOGIN_REQUEST_DATA","data":{"email":email,"password_length":len(password) if password else 0,"raw_email":data.get('email')},"timestamp":int(time.time()*1000)}) + '\n')
+                f.flush()
+        except Exception as log_err:
+            print(f"DEBUG LOG ERROR (REQUEST_DATA): {log_err}")
+        # #endregion
+        print(f"DEBUG: Login attempt for email: {email}")
 
         if not email or not password:
             return jsonify({'error': 'Email and password are required'}), 400
@@ -919,7 +938,22 @@ def login():
 
         try:
             user = User.query.filter_by(email=email).first()
+            # #region agent log
+            try:
+                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:941","message":"USER_QUERY_RESULT","data":{"user_found":user is not None,"email_queried":email,"user_id":user.id if user else None,"user_email":user.email if user else None,"user_is_admin":user.is_admin if user else None},"timestamp":int(time.time()*1000)}) + '\n')
+                    f.flush()
+            except Exception as log_err:
+                print(f"DEBUG LOG ERROR (USER_QUERY): {log_err}")
+            # #endregion
+            print(f"DEBUG: User query result - found: {user is not None}, email: {user.email if user else None}, is_admin: {user.is_admin if user else None}")
         except Exception as query_error:
+            # #region agent log
+            try:
+                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:922","message":"USER_QUERY_ERROR","data":{"error":str(query_error),"email_queried":email},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except: pass
+            # #endregion
             # Check if it's a missing column error
             error_str = str(query_error)
             if ('is_admin' in error_str or 'resume_summary' in error_str or 'skills' in error_str or 'career_goals' in error_str) and 'does not exist' in error_str:
@@ -942,6 +976,12 @@ def login():
                 return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
         if not user:
+            # #region agent log
+            try:
+                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:944","message":"USER_NOT_FOUND","data":{"email":email,"is_wvsu":is_wvsu_email(email)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except: pass
+            # #endregion
             # User doesn't exist - enforce WVSU email requirement
             if not is_wvsu_email(email):
                 return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
@@ -949,13 +989,50 @@ def login():
         
         # User exists - allow admin users regardless of email domain
         # For non-admin users, enforce WVSU email requirement
+        # #region agent log
+        try:
+            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:952","message":"ADMIN_CHECK_BEFORE_VALIDATION","data":{"user_is_admin":user.is_admin,"is_admin_type":type(user.is_admin).__name__,"is_wvsu":is_wvsu_email(email),"will_block":not user.is_admin and not is_wvsu_email(email)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except: pass
+        # #endregion
         if not user.is_admin and not is_wvsu_email(email):
+            # #region agent log
+            try:
+                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:953","message":"EMAIL_VALIDATION_BLOCKED","data":{"user_is_admin":user.is_admin,"is_wvsu":is_wvsu_email(email)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except: pass
+            # #endregion
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
         try:
-            if not user.check_password(password):
+            # #region agent log
+            try:
+                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"index.py:956","message":"PASSWORD_CHECK_BEFORE","data":{"user_id":user.id,"has_password_hash":bool(user.password_hash)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            password_check_result = user.check_password(password)
+            # #region agent log
+            try:
+                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"index.py:956","message":"PASSWORD_CHECK_RESULT","data":{"result":password_check_result},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            if not password_check_result:
+                # #region agent log
+                try:
+                    with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"index.py:957","message":"PASSWORD_CHECK_FAILED","data":{},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+                except: pass
+                # #endregion
                 return jsonify({'error': 'Invalid credentials'}), 401
         except Exception as password_error:
+            # #region agent log
+            try:
+                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"index.py:958","message":"PASSWORD_CHECK_EXCEPTION","data":{"error":str(password_error)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+            except: pass
+            # #endregion
             print(f"Error checking password: {password_error}")
             import traceback
             traceback.print_exc()
@@ -970,11 +1047,23 @@ def login():
             print(f"Session error (non-critical): {session_error}")
             # Session error is not critical, continue with login
 
+        # #region agent log
+        try:
+            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C","location":"index.py:970","message":"LOGIN_SUCCESS","data":{"user_id":user.id,"user_email":user.email,"user_is_admin":user.is_admin},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except: pass
+        # #endregion
         return jsonify({
             'message': 'Login successful', 
             'user': user.to_dict()
         })
     except Exception as e:
+        # #region agent log
+        try:
+            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"index.py:975","message":"LOGIN_EXCEPTION","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(__import__('time').time()*1000)}) + '\n')
+        except: pass
+        # #endregion
         print(f"Unexpected error in login: {e}")
         import traceback
         traceback.print_exc()

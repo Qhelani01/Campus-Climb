@@ -693,8 +693,16 @@ class CampusClimbApp {
         // Email validation removed - backend handles it (allows admin users with any email)
         // Non-admin users still require @wvstateu.edu email (enforced by backend)
 
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:690',message:'FRONTEND_LOGIN_START',data:{email:email,password_length:password.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+
         this.setButtonLoading('loginSubmitBtn', true);
 
+        // #region agent log
+        console.log('DEBUG: About to send login request to:', `${this.apiBaseUrl}/auth/login`);
+        fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:703',message:'FRONTEND_LOGIN_REQUEST_START',data:{api_url:`${this.apiBaseUrl}/auth/login`,email:email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(e=>console.error('Log error:',e));
+        // #endregion
         try {
             const response = await fetch(`${this.apiBaseUrl}/auth/login`, {
                 method: 'POST',
@@ -704,6 +712,10 @@ class CampusClimbApp {
                 credentials: 'include', // Include cookies for session
                 body: JSON.stringify({ email, password })
             });
+            // #region agent log
+            console.log('DEBUG: Login response received:', response.status, response.statusText, response.ok);
+            fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:712',message:'FRONTEND_LOGIN_RESPONSE',data:{status:response.status,statusText:response.statusText,ok:response.ok,api_url:`${this.apiBaseUrl}/auth/login`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(e=>console.error('Log error:',e));
+            // #endregion
 
             // Clone response for potential error reading
             const responseClone = response.clone();
@@ -711,8 +723,15 @@ class CampusClimbApp {
 
             try {
                 data = await response.json();
+                // #region agent log
+                console.log('DEBUG: Response data parsed:', data);
+                fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:720',message:'FRONTEND_LOGIN_DATA_PARSED',data:{has_user:!!data.user,has_error:!!data.error,error_message:data.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(e=>console.error('Log error:',e));
+                // #endregion
             } catch (jsonError) {
                 console.error('Failed to parse JSON response:', jsonError);
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:722',message:'FRONTEND_LOGIN_JSON_PARSE_ERROR',data:{error:jsonError.message,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(e=>console.error('Log error:',e));
+                // #endregion
                 try {
                     const text = await responseClone.text();
                     console.error('Response text:', text);
@@ -724,6 +743,9 @@ class CampusClimbApp {
             }
 
             if (response.ok) {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:733',message:'FRONTEND_LOGIN_SUCCESS',data:{user_id:data.user?.id,user_email:data.user?.email,user_is_admin:data.user?.is_admin},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 this.currentUser = data.user;
                 localStorage.setItem('userEmail', email);
                 localStorage.setItem('userData', JSON.stringify(data.user));
@@ -732,12 +754,19 @@ class CampusClimbApp {
                 this.setupPeriodicRefresh();
                 this.showMessage('Login successful! Welcome back.', 'success');
             } else {
+                // #region agent log
+                console.log('DEBUG: Login failed - response.ok is false. Status:', response.status, 'Data:', data);
+                fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:748',message:'FRONTEND_LOGIN_ERROR',data:{error:data.error,status:response.status,error_message_shown:data.error||'Login failed',response_ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(e=>console.error('Log error:',e));
+                // #endregion
                 const errorMsg = data.error || `Login failed (${response.status}). Please try again.`;
                 console.error('Login failed:', response.status, data);
                 this.showMessage(errorMsg, 'error', 'loginMessage');
             }
         } catch (error) {
             console.error('Login error:', error);
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/5554355a-10a5-4c58-b753-9612d8cd5684',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:750',message:'FRONTEND_LOGIN_EXCEPTION',data:{error:error.message,error_type:error.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(e=>console.error('Log error:',e));
+            // #endregion
             const errorMsg = error.message.includes('Failed to fetch') || error.message.includes('NetworkError')
                 ? 'Cannot connect to server. Please make sure the backend is running on port 8000.'
                 : `Login failed: ${error.message}. Please check your connection and try again.`;
