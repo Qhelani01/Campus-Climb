@@ -13,8 +13,17 @@ from functools import wraps
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_assistant import generate_application_advice
-from scheduler import fetch_all_opportunities, get_fetch_logs
-from fetcher_config import FetcherConfig
+
+# Import scheduler functions lazily to avoid circular imports
+def get_fetch_functions():
+    """Get fetch functions, importing only when needed"""
+    import scheduler
+    return scheduler.fetch_all_opportunities, scheduler.get_fetch_logs
+
+def get_fetcher_config():
+    """Get fetcher config, importing only when needed"""
+    import fetcher_config
+    return fetcher_config.FetcherConfig
 
 app = Flask(__name__)
 # Configure CORS to allow requests from frontend
@@ -47,19 +56,32 @@ Session(app)
 # Database configuration
 # Force persistent database - no more in-memory SQLite
 database_url = os.environ.get('DATABASE_URL')
+is_postgres = False
 if not database_url:
     # Fallback to a persistent SQLite file
     database_url = 'sqlite:///campus_climb.db'
 elif database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    is_postgres = True
+elif database_url.startswith('postgresql://'):
+    is_postgres = True
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+
+# Engine options - PostgreSQL-specific options only for PostgreSQL
+engine_options = {
     'pool_pre_ping': True,
-    'pool_recycle': 300,
-    'connect_args': {'connect_timeout': 10}
 }
+if is_postgres:
+    # PostgreSQL-specific options
+    engine_options['pool_recycle'] = 300
+    engine_options['connect_args'] = {'connect_timeout': 10}
+else:
+    # SQLite-specific options (if any)
+    engine_options['connect_args'] = {'check_same_thread': False}
+
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options
 
 db = SQLAlchemy(app)
 
@@ -199,7 +221,41 @@ def admin_required(f):
     """Decorator to require admin authentication"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # #region agent log
+        log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
+        try:
+            import json
+            from datetime import datetime
+            with open(log_path, 'a') as f_log:
+                f_log.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'admin-ui-test',
+                    'hypothesisId': 'A',
+                    'location': 'index.py:220',
+                    'message': 'admin_required decorator called',
+                    'data': {'function': f.__name__},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
         user = get_current_user()
+        
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f_log:
+                f_log.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'admin-ui-test',
+                    'hypothesisId': 'A',
+                    'location': 'index.py:227',
+                    'message': 'admin_required auth check',
+                    'data': {'has_user': bool(user), 'is_admin': user.is_admin if user else False},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
         if not user:
             return jsonify({'error': 'Authentication required'}), 401
         if not user.is_admin:
@@ -363,58 +419,87 @@ def check_and_add_user_profile_columns():
 def check_and_add_opportunity_source_columns():
     """Check if opportunity source columns exist, add them if missing"""
     try:
+        database_url = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        is_sqlite = 'sqlite' in database_url.lower()
+        
         # Check which columns exist
-        result = db.session.execute(text("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-            AND table_name = 'opportunities' 
-            AND column_name IN ('source', 'source_id', 'source_url', 'last_fetched', 'auto_fetched')
-        """))
-        existing_columns = {row[0] for row in result.fetchall()}
+        if is_sqlite:
+            # SQLite: Use PRAGMA table_info
+            result = db.session.execute(text("PRAGMA table_info(opportunities)"))
+            existing_columns = {row[1] for row in result.fetchall()}  # Column name is at index 1
+        else:
+            # PostgreSQL: Use information_schema
+            result = db.session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = 'opportunities' 
+                AND column_name IN ('source', 'source_id', 'source_url', 'last_fetched', 'auto_fetched')
+            """))
+            existing_columns = {row[0] for row in result.fetchall()}
         
         columns_to_add = []
         if 'source' not in existing_columns:
-            columns_to_add.append(('source', 'VARCHAR(50)'))
+            columns_to_add.append(('source', 'VARCHAR(50)' if not is_sqlite else 'TEXT'))
         if 'source_id' not in existing_columns:
-            columns_to_add.append(('source_id', 'VARCHAR(200)'))
+            columns_to_add.append(('source_id', 'VARCHAR(200)' if not is_sqlite else 'TEXT'))
         if 'source_url' not in existing_columns:
-            columns_to_add.append(('source_url', 'VARCHAR(500)'))
+            columns_to_add.append(('source_url', 'VARCHAR(500)' if not is_sqlite else 'TEXT'))
         if 'last_fetched' not in existing_columns:
-            columns_to_add.append(('last_fetched', 'TIMESTAMP'))
+            columns_to_add.append(('last_fetched', 'TIMESTAMP' if not is_sqlite else 'DATETIME'))
         if 'auto_fetched' not in existing_columns:
-            columns_to_add.append(('auto_fetched', 'BOOLEAN DEFAULT FALSE'))
+            columns_to_add.append(('auto_fetched', 'BOOLEAN DEFAULT FALSE' if not is_sqlite else 'INTEGER DEFAULT 0'))
         
         if columns_to_add:
             print(f"Opportunity source columns missing. Adding: {', '.join([c[0] for c in columns_to_add])}...")
+            table_name = 'opportunities' if is_sqlite else 'public.opportunities'
             for column_name, column_type in columns_to_add:
+                try:
+                    db.session.execute(text(f"""
+                        ALTER TABLE {table_name} 
+                        ADD COLUMN {column_name} {column_type}
+                    """))
+                except Exception as col_error:
+                    # Column might already exist (race condition)
+                    print(f"Warning: Could not add column {column_name}: {col_error}")
+            
+            # Create indexes (SQLite and PostgreSQL both support IF NOT EXISTS)
+            index_prefix = '' if is_sqlite else 'public.'
+            try:
+                if 'source' not in existing_columns:
+                    db.session.execute(text(f"""
+                        CREATE INDEX IF NOT EXISTS idx_opportunities_source 
+                        ON {index_prefix}opportunities(source)
+                    """))
+            except Exception as e:
+                print(f"Warning: Could not create source index: {e}")
+            
+            try:
+                if 'source_id' not in existing_columns:
+                    db.session.execute(text(f"""
+                        CREATE INDEX IF NOT EXISTS idx_opportunities_source_id 
+                        ON {index_prefix}opportunities(source_id)
+                    """))
+            except Exception as e:
+                print(f"Warning: Could not create source_id index: {e}")
+            
+            try:
+                if 'auto_fetched' not in existing_columns:
+                    db.session.execute(text(f"""
+                        CREATE INDEX IF NOT EXISTS idx_opportunities_auto_fetched 
+                        ON {index_prefix}opportunities(auto_fetched)
+                    """))
+            except Exception as e:
+                print(f"Warning: Could not create auto_fetched index: {e}")
+            
+            try:
+                # Create composite index
                 db.session.execute(text(f"""
-                    ALTER TABLE public.opportunities 
-                    ADD COLUMN {column_name} {column_type}
+                    CREATE INDEX IF NOT EXISTS idx_opportunities_source_lookup 
+                    ON {index_prefix}opportunities(source, source_id)
                 """))
-            
-            # Create indexes
-            if 'source' not in existing_columns:
-                db.session.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_opportunities_source 
-                    ON public.opportunities(source)
-                """))
-            if 'source_id' not in existing_columns:
-                db.session.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_opportunities_source_id 
-                    ON public.opportunities(source_id)
-                """))
-            if 'auto_fetched' not in existing_columns:
-                db.session.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_opportunities_auto_fetched 
-                    ON public.opportunities(auto_fetched)
-                """))
-            
-            # Create composite index
-            db.session.execute(text("""
-                CREATE INDEX IF NOT EXISTS idx_opportunities_source_lookup 
-                ON public.opportunities(source, source_id)
-            """))
+            except Exception as e:
+                print(f"Warning: Could not create composite index: {e}")
             
             db.session.commit()
             print("Opportunity source columns added successfully")
@@ -475,10 +560,79 @@ def ensure_db_initialized():
 
 @app.route('/api/test', methods=['GET'])
 def test():
+    # Test logging
+    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
+    print("TEST ENDPOINT CALLED")
+    try:
+        import json
+        from datetime import datetime
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'test-endpoint',
+                'hypothesisId': 'A',
+                'location': 'index.py:527',
+                'message': 'Test endpoint called',
+                'data': {},
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }) + '\n')
+        print("TEST ENDPOINT: Log written successfully")
+    except Exception as e:
+        print(f"DEBUG: Test endpoint logging failed: {e}")
+        import traceback
+        traceback.print_exc()
+    
     return jsonify({
         'message': 'API is working!',
         'status': 'success'
     })
+
+@app.route('/api/test/admin-fetch', methods=['POST'])
+def test_admin_fetch():
+    """Test endpoint to verify fetch works without auth"""
+    print("=" * 60)
+    print("TEST ADMIN FETCH ENDPOINT CALLED (NO AUTH)")
+    print("=" * 60)
+    
+    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
+    try:
+        import json
+        from datetime import datetime
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'test-admin-fetch',
+                'hypothesisId': 'A',
+                'location': 'index.py:test_admin_fetch',
+                'message': 'Test admin fetch endpoint called (no auth)',
+                'data': {},
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }) + '\n')
+        
+        fetch_all_opportunities, _ = get_fetch_functions()
+        with app.app_context():
+            results = fetch_all_opportunities()
+        
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'test-admin-fetch',
+                'hypothesisId': 'A',
+                'location': 'index.py:test_admin_fetch',
+                'message': 'Test admin fetch completed',
+                'data': {'results': results},
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }) + '\n')
+        
+        return jsonify({
+            'message': 'Test fetch completed',
+            'results': results
+        })
+    except Exception as e:
+        print(f"ERROR in test_admin_fetch: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/test/register', methods=['POST'])
 def test_register():
@@ -522,6 +676,12 @@ def opportunities():
     try:
         # Ensure database connection
         db.session.execute(text('SELECT 1'))
+        
+        # Check and add source columns if missing (migration)
+        try:
+            check_and_add_opportunity_source_columns()
+        except Exception as migration_error:
+            print(f"Source columns migration check failed (non-critical): {migration_error}")
         
         # Read from database - include opportunities where is_deleted is False or null
         query = Opportunity.query.filter(
@@ -951,14 +1111,86 @@ def admin_dashboard():
 @admin_required
 def admin_fetch_opportunities():
     """Manually trigger opportunity fetch from all sources"""
+    # Force print to console first (this will definitely show)
+    print("=" * 60)
+    print("ADMIN FETCH OPPORTUNITIES ENDPOINT CALLED")
+    print("=" * 60)
+    
+    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
+    
+    # #region agent log - Log BEFORE any operations
+    print(f"Attempting to write to log file: {log_path}")
+    try:
+        import os
+        print(f"Log file exists: {os.path.exists(log_path)}")
+        print(f"Log file writable: {os.access(log_path, os.W_OK) if os.path.exists(log_path) else 'N/A'}")
+    except: pass
+    
+    try:
+        import json
+        from datetime import datetime
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'admin-ui-test',
+                'hypothesisId': 'A',
+                'location': 'index.py:1007',
+                'message': 'admin_fetch_opportunities endpoint ENTRY',
+                'data': {'method': 'POST', 'has_user': bool(get_current_user())},
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }) + '\n')
+    except Exception as log_err:
+        print(f"DEBUG: Failed to write admin endpoint log: {log_err}")
+        import traceback
+        traceback.print_exc()
+    # #endregion
+    
     try:
         print("Admin triggered opportunity fetch...")
-        results = fetch_all_opportunities()
+        
+        fetch_all_opportunities, _ = get_fetch_functions()
+        # Ensure we're in app context for database operations
+        with app.app_context():
+            results = fetch_all_opportunities()
+        
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'admin-ui-test',
+                    'hypothesisId': 'A',
+                    'location': 'index.py:1020',
+                    'message': 'admin_fetch_opportunities completed',
+                    'data': {'results': results},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except Exception as log_err:
+            print(f"DEBUG: Failed to write completion log: {log_err}")
+        # #endregion
+        
         return jsonify({
             'message': 'Opportunities fetched successfully',
             'results': results
         })
     except Exception as e:
+        # #region agent log
+        try:
+            import json
+            from datetime import datetime
+            log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'admin-ui-test',
+                    'hypothesisId': 'E',
+                    'location': 'index.py:1025',
+                    'message': 'admin_fetch_opportunities error',
+                    'data': {'error': str(e), 'error_type': type(e).__name__},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
         print(f"Error in admin fetch opportunities: {e}")
         import traceback
         traceback.print_exc()
@@ -970,6 +1202,7 @@ def admin_get_fetch_logs():
     """Get fetch operation logs"""
     try:
         limit = int(request.args.get('limit', 50))
+        _, get_fetch_logs = get_fetch_functions()
         logs = get_fetch_logs(limit)
         return jsonify({
             'logs': logs,
@@ -984,6 +1217,7 @@ def admin_get_fetch_logs():
 def admin_get_fetcher_status():
     """Get status of all fetchers"""
     try:
+        FetcherConfig = get_fetcher_config()
         enabled_fetchers = FetcherConfig.get_enabled_fetchers()
         rss_feeds = FetcherConfig.get_rss_feeds()
         
@@ -1019,7 +1253,10 @@ def cron_fetch_opportunities():
                 return jsonify({'error': 'Unauthorized'}), 401
         
         print("Cron job triggered: Fetching opportunities...")
-        results = fetch_all_opportunities()
+        fetch_all_opportunities, _ = get_fetch_functions()
+        # Ensure we're in app context for database operations
+        with app.app_context():
+            results = fetch_all_opportunities()
         return jsonify({
             'message': 'Cron job completed',
             'results': results

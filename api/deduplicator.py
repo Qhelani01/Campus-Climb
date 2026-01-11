@@ -12,19 +12,70 @@ if parent_dir not in sys.path:
 
 from datetime import datetime
 from typing import Dict, Optional, Tuple
-from api.index import db, Opportunity
 from sqlalchemy import text
+import json
 
-def deduplicate_opportunity(opportunity_dict: Dict) -> Tuple[Optional[Opportunity], bool]:
+# Import db and Opportunity lazily to avoid circular imports
+def get_db():
+    """Get database instance from Flask app"""
+    # Get db from the current Flask app context
+    # Flask-SQLAlchemy stores the db instance in the app
+    from flask import current_app
+    from flask_sqlalchemy import SQLAlchemy
+    
+    # Check if we're in app context
+    try:
+        app = current_app._get_current_object()
+    except RuntimeError:
+        raise RuntimeError("Database access requires Flask app context. Ensure fetch_all_opportunities is called within app.app_context()")
+    
+    # Get the SQLAlchemy extension from the app
+    # Flask-SQLAlchemy registers itself, and we can access db through it
+    if hasattr(app, 'extensions') and 'sqlalchemy' in app.extensions:
+        # The extension object has the db attribute
+        sqlalchemy_ext = app.extensions['sqlalchemy']
+        if hasattr(sqlalchemy_ext, 'db'):
+            return sqlalchemy_ext.db
+    
+    # Fallback: import directly (should work if app context is properly set)
+    import sys
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(current_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    from api.index import db
+    return db
+
+def get_opportunity_model():
+    """Get Opportunity model"""
+    import sys
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(current_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    
+    from api.index import Opportunity
+    return Opportunity
+
+def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -> Tuple[Optional[object], bool]:
     """
     Check if opportunity already exists and return existing or None.
     
     Args:
         opportunity_dict: Dictionary with opportunity data including source and source_id
+        db: SQLAlchemy database instance (optional, will be retrieved if not provided)
+        Opportunity: Opportunity model class (optional, will be retrieved if not provided)
     
     Returns:
         Tuple of (existing_opportunity_or_None, is_duplicate)
     """
+    if db is None:
+        db = get_db()
+    if Opportunity is None:
+        Opportunity = get_opportunity_model()
+    
     source = opportunity_dict.get('source')
     source_id = opportunity_dict.get('source_id')
     title = opportunity_dict.get('title', '').strip()
@@ -99,19 +150,87 @@ def titles_similar(title1: str, title2: str, threshold: float = 0.85) -> bool:
         return False
 
 
-def save_or_update_opportunity(opportunity_dict: Dict) -> Tuple[Opportunity, bool]:
+def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -> Tuple:
     """
     Save opportunity or update existing one if duplicate found.
     
     Args:
         opportunity_dict: Dictionary with opportunity data
+        db: SQLAlchemy database instance (optional, will be retrieved if not provided)
+        Opportunity: Opportunity model class (optional, will be retrieved if not provided)
     
     Returns:
         Tuple of (opportunity_object, is_new)
     """
-    existing, is_duplicate = deduplicate_opportunity(opportunity_dict)
+    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
+    # #region agent log
+    try:
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'C',
+                'location': 'deduplicator.py:132',
+                'message': 'save_or_update_opportunity entry',
+                'data': {'title': opportunity_dict.get('title', '')[:50], 'source': opportunity_dict.get('source'), 'source_id': opportunity_dict.get('source_id'), 'db_provided': db is not None, 'Opportunity_provided': Opportunity is not None},
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }) + '\n')
+    except: pass
+    # #endregion
+    
+    if db is None:
+        db = get_db()
+    if Opportunity is None:
+        Opportunity = get_opportunity_model()
+    
+    # #region agent log
+    try:
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'C',
+                'location': 'deduplicator.py:145',
+                'message': 'Before deduplicate_opportunity',
+                'data': {},
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }) + '\n')
+    except: pass
+    # #endregion
+    
+    existing, is_duplicate = deduplicate_opportunity(opportunity_dict, db=db, Opportunity=Opportunity)
+    
+    # #region agent log
+    try:
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'C',
+                'location': 'deduplicator.py:147',
+                'message': 'After deduplicate_opportunity',
+                'data': {'is_duplicate': is_duplicate, 'existing_id': existing.id if existing else None},
+                'timestamp': int(datetime.utcnow().timestamp() * 1000)
+            }) + '\n')
+    except: pass
+    # #endregion
     
     if is_duplicate and existing:
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'C',
+                    'location': 'deduplicator.py:148',
+                    'message': 'Updating existing opportunity',
+                    'data': {'existing_id': existing.id},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
         # Update existing opportunity
         existing.title = opportunity_dict.get('title', existing.title)
         existing.company = opportunity_dict.get('company', existing.company)
@@ -130,14 +249,62 @@ def save_or_update_opportunity(opportunity_dict: Dict) -> Tuple[Opportunity, boo
         deadline_str = opportunity_dict.get('deadline')
         if deadline_str:
             try:
-                from datetime import datetime
                 existing.deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date()
             except:
                 pass
         
-        db.session.commit()
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'C',
+                    'location': 'deduplicator.py:171',
+                    'message': 'Before db.session.commit (update)',
+                    'data': {},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
+        try:
+            db.session.commit()
+        except Exception as db_err:
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'C',
+                        'location': 'deduplicator.py:175',
+                        'message': 'Database commit error (update)',
+                        'data': {'error': str(db_err), 'error_type': type(db_err).__name__},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
+            db.session.rollback()
+            raise
+        
         return existing, False
     else:
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'C',
+                    'location': 'deduplicator.py:177',
+                    'message': 'Creating new opportunity',
+                    'data': {},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
         # Create new opportunity
         new_opp = Opportunity(
             title=opportunity_dict.get('title', ''),
@@ -160,12 +327,60 @@ def save_or_update_opportunity(opportunity_dict: Dict) -> Tuple[Opportunity, boo
         deadline_str = opportunity_dict.get('deadline')
         if deadline_str:
             try:
-                from datetime import datetime
                 new_opp.deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date()
             except:
                 pass
         
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'C',
+                    'location': 'deduplicator.py:201',
+                    'message': 'Before db.session.add and commit (new)',
+                    'data': {},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
         db.session.add(new_opp)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as db_err:
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'C',
+                        'location': 'deduplicator.py:205',
+                        'message': 'Database commit error (new)',
+                        'data': {'error': str(db_err), 'error_type': type(db_err).__name__},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
+            db.session.rollback()
+            raise
+        
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'C',
+                    'location': 'deduplicator.py:217',
+                    'message': 'After db.session.commit (new)',
+                    'data': {'new_opp_id': new_opp.id if new_opp else None},
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
         return new_opp, True
 

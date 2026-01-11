@@ -7,6 +7,8 @@ import requests
 from datetime import datetime
 from typing import List, Dict, Optional
 from api.opportunity_fetchers import OpportunityFetcher
+import json
+import os
 
 class RSSFetcher(OpportunityFetcher):
     """Fetcher for RSS/Atom feeds"""
@@ -17,9 +19,105 @@ class RSSFetcher(OpportunityFetcher):
     
     def fetch(self) -> List[Dict]:
         """Fetch opportunities from RSS feed"""
+        log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
         try:
-            # Parse RSS feed
-            feed = feedparser.parse(self.feed_url)
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'B',
+                        'location': 'rss_fetcher.py:18',
+                        'message': 'RSS fetch entry',
+                        'data': {'source_name': self.source_name, 'feed_url': self.feed_url},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
+            
+            # Fetch RSS feed using requests (better error handling and SSL support)
+            # Use a realistic browser user agent to avoid 403 errors
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Referer': 'https://www.google.com/'
+            }
+            
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'B',
+                        'location': 'rss_fetcher.py:33',
+                        'message': 'Before requests.get',
+                        'data': {'source_name': self.source_name, 'feed_url': self.feed_url},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
+            
+            # Use requests to fetch the feed content
+            response = requests.get(self.feed_url, headers=headers, timeout=30, verify=True, allow_redirects=True)
+            
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'B',
+                        'location': 'rss_fetcher.py:36',
+                        'message': 'After requests.get',
+                        'data': {'source_name': self.source_name, 'status_code': response.status_code, 'content_length': len(response.content) if response.content else 0},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
+            
+            # Check for 403 or other blocking
+            if response.status_code == 403:
+                # #region agent log
+                try:
+                    with open(log_path, 'a') as f:
+                        f.write(json.dumps({
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'B',
+                            'location': 'rss_fetcher.py:40',
+                            'message': '403 Forbidden error',
+                            'data': {'source_name': self.source_name, 'feed_url': self.feed_url},
+                            'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                        }) + '\n')
+                except: pass
+                # #endregion
+                print(f"Access forbidden (403) for {self.feed_url}. The site may be blocking automated requests.")
+                return []
+            
+            response.raise_for_status()
+            
+            # Parse the RSS feed content
+            feed = feedparser.parse(response.content)
+            
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'B',
+                        'location': 'rss_fetcher.py:45',
+                        'message': 'After feedparser.parse',
+                        'data': {'source_name': self.source_name, 'entries_count': len(feed.entries) if hasattr(feed, 'entries') else 0, 'bozo': feed.bozo if hasattr(feed, 'bozo') else False},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
             
             if feed.bozo:
                 print(f"Warning: RSS feed parsing issues for {self.feed_url}: {feed.bozo_exception}")
@@ -35,9 +133,44 @@ class RSSFetcher(OpportunityFetcher):
                     continue
             
             self.fetch_count = len(opportunities)
+            print(f"Successfully fetched {len(opportunities)} opportunities from {self.source_name}")
             return opportunities
+        except requests.exceptions.RequestException as e:
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'B',
+                        'location': 'rss_fetcher.py:61',
+                        'message': 'RequestException in RSS fetch',
+                        'data': {'source_name': self.source_name, 'feed_url': self.feed_url, 'error': str(e), 'error_type': type(e).__name__},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
+            print(f"Network error fetching RSS feed {self.feed_url}: {e}")
+            self.error_count += 1
+            return []
         except Exception as e:
+            # #region agent log
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'B',
+                        'location': 'rss_fetcher.py:66',
+                        'message': 'Exception in RSS fetch',
+                        'data': {'source_name': self.source_name, 'feed_url': self.feed_url, 'error': str(e), 'error_type': type(e).__name__},
+                        'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                    }) + '\n')
+            except: pass
+            # #endregion
             print(f"Error fetching RSS feed {self.feed_url}: {e}")
+            import traceback
+            traceback.print_exc()
             self.error_count += 1
             return []
     
@@ -187,6 +320,32 @@ class EventbriteFetcher(RSSFetcher):
             feed_url=feed_url or default_url,
             source_name='eventbrite'
         )
+
+
+class RedditJobsFetcher(RSSFetcher):
+    """Fetcher for Reddit job board RSS feeds"""
+    
+    def __init__(self, feed_url: str, subreddit: str):
+        super().__init__(
+            feed_url=feed_url,
+            source_name=f'reddit_{subreddit}'
+        )
+    
+    def extract_company(self, entry: Dict, title: str) -> str:
+        """Reddit posts don't have company info, extract from title or use subreddit"""
+        # Try to extract from title (e.g., "[Hiring] Company Name - Position")
+        if ' - ' in title:
+            parts = title.split(' - ')
+            if len(parts) > 1:
+                return parts[0].replace('[Hiring]', '').replace('[For Hire]', '').strip()
+        return 'Various Companies'
+    
+    def determine_type(self, title: str, description: str, source: str) -> str:
+        """Reddit job posts are typically jobs or freelance"""
+        text = (title + ' ' + description).lower()
+        if 'freelance' in text or 'contract' in text:
+            return 'job'  # Still a job, just contract-based
+        return 'job'
     
     def determine_type(self, title: str, description: str, source: str) -> str:
         """Eventbrite events are typically workshops or conferences"""
