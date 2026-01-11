@@ -339,28 +339,48 @@ _db_initialized = False
 def check_and_add_is_admin_column():
     """Check if is_admin column exists, add it if missing"""
     try:
-        # Check if column exists
-        result = db.session.execute(text("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-            AND table_name = 'users' 
-            AND column_name = 'is_admin'
-        """))
-        column_exists = result.fetchone() is not None
+        # Check if PostgreSQL or SQLite
+        is_postgres = 'postgresql' in str(db.engine.url)
+        
+        if is_postgres:
+            # PostgreSQL: use information_schema
+            result = db.session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = 'users' 
+                AND column_name = 'is_admin'
+            """))
+            column_exists = result.fetchone() is not None
+        else:
+            # SQLite: use PRAGMA table_info
+            result = db.session.execute(text("PRAGMA table_info(users)"))
+            column_exists = any(row[1] == 'is_admin' for row in result.fetchall())
         
         if not column_exists:
             print("is_admin column missing. Adding it...")
-            # Add the column
-            db.session.execute(text("""
-                ALTER TABLE public.users 
-                ADD COLUMN is_admin BOOLEAN DEFAULT FALSE NOT NULL
-            """))
-            # Create index
-            db.session.execute(text("""
-                CREATE INDEX IF NOT EXISTS idx_users_is_admin 
-                ON public.users(is_admin)
-            """))
+            if is_postgres:
+                # Add the column
+                db.session.execute(text("""
+                    ALTER TABLE public.users 
+                    ADD COLUMN is_admin BOOLEAN DEFAULT FALSE NOT NULL
+                """))
+                # Create index
+                db.session.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_users_is_admin 
+                    ON public.users(is_admin)
+                """))
+            else:
+                # SQLite: no schema prefix, use INTEGER for boolean
+                db.session.execute(text("""
+                    ALTER TABLE users 
+                    ADD COLUMN is_admin BOOLEAN DEFAULT 0 NOT NULL
+                """))
+                # Create index
+                db.session.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_users_is_admin 
+                    ON users(is_admin)
+                """))
             db.session.commit()
             print("is_admin column added successfully")
             return True
@@ -377,15 +397,23 @@ def check_and_add_is_admin_column():
 def check_and_add_user_profile_columns():
     """Check if user profile columns exist, add them if missing"""
     try:
-        # Check which columns exist
-        result = db.session.execute(text("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-            AND table_name = 'users' 
-            AND column_name IN ('resume_summary', 'skills', 'career_goals')
-        """))
-        existing_columns = {row[0] for row in result.fetchall()}
+        # Check if PostgreSQL or SQLite
+        is_postgres = 'postgresql' in str(db.engine.url)
+        
+        if is_postgres:
+            # PostgreSQL: use information_schema
+            result = db.session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = 'users' 
+                AND column_name IN ('resume_summary', 'skills', 'career_goals')
+            """))
+            existing_columns = {row[0] for row in result.fetchall()}
+        else:
+            # SQLite: use PRAGMA table_info
+            result = db.session.execute(text("PRAGMA table_info(users)"))
+            existing_columns = {row[1] for row in result.fetchall()}
         
         columns_to_add = []
         if 'resume_summary' not in existing_columns:
@@ -398,11 +426,17 @@ def check_and_add_user_profile_columns():
         if columns_to_add:
             print(f"User profile columns missing. Adding: {', '.join([c.split()[0] for c in columns_to_add])}...")
             for column_def in columns_to_add:
-                column_name = column_def.split()[0]
-                db.session.execute(text(f"""
-                    ALTER TABLE public.users 
-                    ADD COLUMN {column_def}
-                """))
+                if is_postgres:
+                    db.session.execute(text(f"""
+                        ALTER TABLE public.users 
+                        ADD COLUMN {column_def}
+                    """))
+                else:
+                    # SQLite: no schema prefix
+                    db.session.execute(text(f"""
+                        ALTER TABLE users 
+                        ADD COLUMN {column_def}
+                    """))
             db.session.commit()
             print("User profile columns added successfully")
             return True
