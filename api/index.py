@@ -937,16 +937,24 @@ def login():
             print(f"Migration check failed (non-critical): {migration_error}")
 
         try:
-            user = User.query.filter_by(email=email).first()
+            # Try case-insensitive email lookup for PostgreSQL
+            is_postgres = 'postgresql' in str(db.engine.url) or 'postgres' in str(db.engine.url)
+            if is_postgres:
+                # PostgreSQL: use ILIKE for case-insensitive search
+                user = User.query.filter(User.email.ilike(email)).first()
+            else:
+                # SQLite: email is already lowercased, so direct match
+                user = User.query.filter_by(email=email).first()
+            
             # #region agent log
             try:
                 with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:941","message":"USER_QUERY_RESULT","data":{"user_found":user is not None,"email_queried":email,"user_id":user.id if user else None,"user_email":user.email if user else None,"user_is_admin":user.is_admin if user else None},"timestamp":int(time.time()*1000)}) + '\n')
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:941","message":"USER_QUERY_RESULT","data":{"user_found":user is not None,"email_queried":email,"user_id":user.id if user else None,"user_email":user.email if user else None,"user_is_admin":user.is_admin if user else None,"is_postgres":is_postgres},"timestamp":int(time.time()*1000)}) + '\n')
                     f.flush()
             except Exception as log_err:
                 print(f"DEBUG LOG ERROR (USER_QUERY): {log_err}")
             # #endregion
-            print(f"DEBUG: User query result - found: {user is not None}, email: {user.email if user else None}, is_admin: {user.is_admin if user else None}")
+            print(f"DEBUG: User query result - found: {user is not None}, email: {user.email if user else None}, is_admin: {user.is_admin if user else None}, is_postgres: {is_postgres}")
         except Exception as query_error:
             # #region agent log
             try:
@@ -991,16 +999,24 @@ def login():
         # For non-admin users, enforce WVSU email requirement
         # #region agent log
         try:
+            # Handle potential None or boolean conversion issues (PostgreSQL might return NULL)
+            is_admin_value = bool(user.is_admin) if user.is_admin is not None else False
             with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:952","message":"ADMIN_CHECK_BEFORE_VALIDATION","data":{"user_is_admin":user.is_admin,"is_admin_type":type(user.is_admin).__name__,"is_wvsu":is_wvsu_email(email),"will_block":not user.is_admin and not is_wvsu_email(email)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-        except: pass
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:1003","message":"ADMIN_CHECK_BEFORE_VALIDATION","data":{"user_is_admin":is_admin_value,"is_admin_raw":user.is_admin,"is_admin_type":type(user.is_admin).__name__,"is_wvsu":is_wvsu_email(email),"will_block":not is_admin_value and not is_wvsu_email(email)},"timestamp":int(time.time()*1000)}) + '\n')
+                f.flush()
+        except Exception as log_err:
+            print(f"DEBUG LOG ERROR (ADMIN_CHECK): {log_err}")
         # #endregion
-        if not user.is_admin and not is_wvsu_email(email):
+        # Ensure is_admin is properly converted to boolean (handle NULL from PostgreSQL)
+        user_is_admin = bool(user.is_admin) if user.is_admin is not None else False
+        if not user_is_admin and not is_wvsu_email(email):
             # #region agent log
             try:
                 with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:953","message":"EMAIL_VALIDATION_BLOCKED","data":{"user_is_admin":user.is_admin,"is_wvsu":is_wvsu_email(email)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except: pass
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:1013","message":"EMAIL_VALIDATION_BLOCKED","data":{"user_is_admin":user_is_admin,"is_admin_raw":user.is_admin,"is_wvsu":is_wvsu_email(email)},"timestamp":int(time.time()*1000)}) + '\n')
+                    f.flush()
+            except Exception as log_err:
+                print(f"DEBUG LOG ERROR (EMAIL_VALIDATION): {log_err}")
             # #endregion
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
@@ -1435,6 +1451,66 @@ def admin_promote_user():
             return jsonify({'error': f'Database error: {str(db_error)}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/setup/admin', methods=['POST'])
+def setup_admin_user():
+    """
+    One-time setup endpoint to create/update admin user.
+    Requires SETUP_TOKEN environment variable for security.
+    """
+    try:
+        # Check for setup token (set in Vercel environment variables)
+        setup_token = os.environ.get('SETUP_TOKEN')
+        provided_token = request.headers.get('X-Setup-Token') or request.json.get('setup_token') if request.is_json else None
+        
+        if setup_token and provided_token != setup_token:
+            return jsonify({'error': 'Invalid setup token'}), 401
+        
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password') or ''
+        first_name = data.get('first_name') or 'Admin'
+        last_name = data.get('last_name') or 'User'
+        
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+        
+        # Check if user exists
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            # Update existing user
+            user.set_password(password)
+            user.is_admin = True
+            user.first_name = first_name
+            user.last_name = last_name
+            db.session.commit()
+            return jsonify({
+                'message': 'Admin user updated successfully',
+                'user': user.to_dict()
+            }), 200
+        else:
+            # Create new admin user
+            user = User(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                is_admin=True
+            )
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+            return jsonify({
+                'message': 'Admin user created successfully',
+                'user': user.to_dict()
+            }), 201
+            
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error setting up admin user: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to setup admin user: {str(e)}'}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
