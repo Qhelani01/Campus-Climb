@@ -72,9 +72,9 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
         Tuple of (existing_opportunity_or_None, is_duplicate)
     """
     if db is None:
-    db = get_db()
+        db = get_db()
     if Opportunity is None:
-    Opportunity = get_opportunity_model()
+        Opportunity = get_opportunity_model()
     
     source = opportunity_dict.get('source')
     source_id = opportunity_dict.get('source_id')
@@ -187,9 +187,9 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
     # #endregion
     
     if db is None:
-    db = get_db()
+        db = get_db()
     if Opportunity is None:
-    Opportunity = get_opportunity_model()
+        Opportunity = get_opportunity_model()
     
     # #region agent log
     try:
@@ -321,7 +321,8 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
         # #endregion
         
         try:
-        db.session.commit()
+            db.session.commit()
+            print(f"SUCCESS: Updated opportunity ID {existing.id}")
         except Exception as db_err:
             # #region agent log
             import traceback
