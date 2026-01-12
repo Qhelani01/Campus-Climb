@@ -1008,8 +1008,17 @@ class CampusClimbApp {
                 
                 this.showMessage('Opportunities fetched successfully!', 'success');
             } else {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to fetch opportunities');
+                // Try to parse error as JSON, but handle HTML responses
+                let errorMessage = 'Unknown error';
+                try {
+                    const error = await response.json();
+                    errorMessage = error.error || errorMessage;
+                } catch (parseError) {
+                    // Response is not JSON, get text instead
+                    const text = await response.text();
+                    errorMessage = `Server error (${response.status}): ${text.substring(0, 100)}`;
+                }
+                throw new Error(errorMessage);
             }
         } catch (error) {
             console.error('Error fetching opportunities:', error);
