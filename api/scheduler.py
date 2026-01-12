@@ -416,6 +416,15 @@ def fetch_all_opportunities() -> Dict:
     except: pass
     # #endregion
     
+    # Ensure database session is cleaned up to release connections back to pool
+    # This is crucial for serverless environments with limited connection pools
+    try:
+        from deduplicator import get_db
+        db = get_db()
+        db.session.remove()
+    except Exception as cleanup_err:
+        print(f"Warning: Failed to cleanup database session: {cleanup_err}")
+    
     return results
 
 

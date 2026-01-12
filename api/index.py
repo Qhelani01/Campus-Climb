@@ -290,7 +290,17 @@ def admin_required(f):
         except: pass
         # #endregion
         
-        user = get_current_user()
+        try:
+            user = get_current_user()
+        except Exception as auth_error:
+            # Catch database connection errors and return JSON instead of HTML
+            error_msg = str(auth_error)
+            if 'QueuePool' in error_msg or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                return jsonify({
+                    'error': 'Database connection unavailable. Please try again in a moment.',
+                    'details': 'Connection pool exhausted or timeout'
+                }), 503
+            return jsonify({'error': f'Authentication failed: {error_msg}'}), 500
         
         # #region agent log
         try:
@@ -614,8 +624,18 @@ def ensure_db_initialized():
     # Always check on Vercel, but only once per function instance
     if is_vercel and not _db_initialized:
         try:
-            # Test database connection first
-            db.session.execute(text('SELECT 1'))
+            # Test database connection first with timeout handling
+            from sqlalchemy.exc import TimeoutError, OperationalError
+            try:
+                db.session.execute(text('SELECT 1'))
+            except (TimeoutError, OperationalError) as conn_err:
+                # If connection pool is exhausted, skip initialization for this request
+                # It will be retried on the next request
+                error_msg = str(conn_err)
+                if 'QueuePool' in error_msg or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                    print(f"Database connection unavailable during initialization (will retry): {conn_err}")
+                    return  # Don't fail the request, just skip initialization
+                raise  # Re-raise other operational errors
             
             # Check if tables exist
             if not tables_exist():
@@ -640,6 +660,7 @@ def ensure_db_initialized():
             print(f"Database initialization error: {e}")
             import traceback
             traceback.print_exc()
+            # Don't fail the request if initialization fails - just log it
             # Don't set _db_initialized to True on error, so we can retry
             # But don't fail the request - let individual endpoints handle errors
 
@@ -1421,8 +1442,15 @@ def admin_fetch_opportunities():
         
         fetch_all_opportunities, _ = get_fetch_functions()
         # Ensure we're in app context for database operations
-        with app.app_context():
-            results = fetch_all_opportunities()
+        try:
+            with app.app_context():
+                results = fetch_all_opportunities()
+        finally:
+            # Always cleanup database session to release connections
+            try:
+                db.session.remove()
+            except Exception as cleanup_err:
+                print(f"Warning: Failed to cleanup database session: {cleanup_err}")
         
         # #region agent log
         try:
