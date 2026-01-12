@@ -84,7 +84,8 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
     
     # First, try exact match by source + source_id
     if source and source_id:
-        existing = Opportunity.query.filter_by(
+        # Use db.session.query() instead of Opportunity.query to avoid app context issues
+        existing = db.session.query(Opportunity).filter_by(
             source=source,
             source_id=source_id,
             is_deleted=False
@@ -95,8 +96,8 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
     
     # Second, try fuzzy match by title + company + type
     if title and company:
-        # Exact match first
-        existing = Opportunity.query.filter(
+        # Use db.session.query() instead of Opportunity.query to avoid app context issues
+        existing = db.session.query(Opportunity).filter(
             Opportunity.title.ilike(f'%{title}%'),
             Opportunity.company.ilike(f'%{company}%'),
             Opportunity.type == opp_type,
