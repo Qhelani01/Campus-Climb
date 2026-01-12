@@ -461,7 +461,6 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
         try:
             db.session.commit()
             print(f"SUCCESS: Created new opportunity ID {new_opp.id if new_opp else 'None'}")
-            print(f"SUCCESS: Created new opportunity ID {new_opp.id if new_opp else 'None'}")
         except Exception as db_err:
             # #region agent log
             import traceback
