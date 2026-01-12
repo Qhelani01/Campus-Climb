@@ -323,21 +323,37 @@ def fetch_all_opportunities() -> Dict:
                         updated_count += 1
                 except Exception as e:
                     # #region agent log
+                    import traceback
+                    error_traceback = traceback.format_exc()
                     try:
                         with open(log_path, 'a') as f:
                             f.write(json.dumps({
                                 'sessionId': 'debug-session',
                                 'runId': 'run1',
-                                'hypothesisId': 'C',
-                                'location': 'scheduler.py:165',
+                                'hypothesisId': 'C,D',
+                                'location': 'scheduler.py:324',
                                 'message': 'Error saving opportunity',
-                                'data': {'source_name': source_name, 'opp_idx': idx, 'error': str(e), 'error_type': type(e).__name__},
+                                'data': {
+                                    'source_name': source_name,
+                                    'opp_idx': idx,
+                                    'error': str(e),
+                                    'error_type': type(e).__name__,
+                                    'error_traceback': error_traceback[:500],
+                                    'opp_title': opp_dict.get('title', '')[:50],
+                                    'opp_source': opp_dict.get('source'),
+                                    'opp_source_id': opp_dict.get('source_id')
+                                },
                                 'timestamp': int(datetime.utcnow().timestamp() * 1000)
                             }) + '\n')
                     except: pass
                     # #endregion
-                    print(f"Error saving opportunity from {source_name}: {e}")
-                    import traceback
+                    # Print detailed error to stdout (visible in Vercel logs)
+                    print(f"ERROR saving opportunity #{idx} from {source_name}:")
+                    print(f"  Title: {opp_dict.get('title', '')[:50]}")
+                    print(f"  Source: {opp_dict.get('source')}, Source ID: {opp_dict.get('source_id')}")
+                    print(f"  Error Type: {type(e).__name__}")
+                    print(f"  Error Message: {str(e)}")
+                    print(f"  Full Traceback:")
                     traceback.print_exc()
                     error_count += 1
                     continue

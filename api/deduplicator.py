@@ -198,7 +198,38 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
     except: pass
     # #endregion
     
-    existing, is_duplicate = deduplicate_opportunity(opportunity_dict, db=db, Opportunity=Opportunity)
+    try:
+        existing, is_duplicate = deduplicate_opportunity(opportunity_dict, db=db, Opportunity=Opportunity)
+    except Exception as dedup_err:
+        # #region agent log
+        import traceback
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'D',
+                    'location': 'deduplicator.py:201',
+                    'message': 'Error in deduplicate_opportunity',
+                    'data': {
+                        'error': str(dedup_err),
+                        'error_type': type(dedup_err).__name__,
+                        'error_traceback': traceback.format_exc()[:500],
+                        'opp_title': opportunity_dict.get('title', '')[:50]
+                    },
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        # Print detailed error to stdout (visible in Vercel logs)
+        print(f"ERROR in deduplicate_opportunity:")
+        print(f"  Title: {opportunity_dict.get('title', '')[:50]}")
+        print(f"  Source: {opportunity_dict.get('source')}, Source ID: {opportunity_dict.get('source_id')}")
+        print(f"  Error Type: {type(dedup_err).__name__}")
+        print(f"  Error Message: {str(dedup_err)}")
+        print(f"  Full Traceback:")
+        traceback.print_exc()
+        raise
     
     # #region agent log
     try:
@@ -207,9 +238,14 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
                 'sessionId': 'debug-session',
                 'runId': 'run1',
                 'hypothesisId': 'C',
-                'location': 'deduplicator.py:147',
+                'location': 'deduplicator.py:220',
                 'message': 'After deduplicate_opportunity',
-                'data': {'is_duplicate': is_duplicate, 'existing_id': existing.id if existing else None},
+                'data': {
+                    'is_duplicate': is_duplicate,
+                    'existing_id': existing.id if existing else None,
+                    'will_update': is_duplicate and existing is not None,
+                    'will_create': not is_duplicate
+                },
                 'timestamp': int(datetime.utcnow().timestamp() * 1000)
             }) + '\n')
     except: pass
@@ -272,19 +308,35 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
             db.session.commit()
         except Exception as db_err:
             # #region agent log
+            import traceback
+            error_traceback = traceback.format_exc()
             try:
                 with open(log_path, 'a') as f:
                     f.write(json.dumps({
                         'sessionId': 'debug-session',
                         'runId': 'run1',
-                        'hypothesisId': 'C',
-                        'location': 'deduplicator.py:175',
+                        'hypothesisId': 'C,D',
+                        'location': 'deduplicator.py:272',
                         'message': 'Database commit error (update)',
-                        'data': {'error': str(db_err), 'error_type': type(db_err).__name__},
+                        'data': {
+                            'error': str(db_err),
+                            'error_type': type(db_err).__name__,
+                            'error_traceback': error_traceback[:500],
+                            'existing_id': existing.id if existing else None,
+                            'opp_title': opportunity_dict.get('title', '')[:50]
+                        },
                         'timestamp': int(datetime.utcnow().timestamp() * 1000)
                     }) + '\n')
             except: pass
             # #endregion
+            # Print detailed error to stdout (visible in Vercel logs)
+            print(f"ERROR committing updated opportunity to database:")
+            print(f"  Existing ID: {existing.id if existing else None}")
+            print(f"  Title: {opportunity_dict.get('title', '')[:50]}")
+            print(f"  Error Type: {type(db_err).__name__}")
+            print(f"  Error Message: {str(db_err)}")
+            print(f"  Full Traceback:")
+            print(error_traceback)
             db.session.rollback()
             raise
         
@@ -306,13 +358,55 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
         # #endregion
         
         # Create new opportunity
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'C',
+                    'location': 'deduplicator.py:309',
+                    'message': 'Creating Opportunity object',
+                    'data': {
+                        'title': opportunity_dict.get('title', '')[:50],
+                        'has_company': bool(opportunity_dict.get('company')),
+                        'has_location': bool(opportunity_dict.get('location')),
+                        'has_type': bool(opportunity_dict.get('type')),
+                        'has_category': bool(opportunity_dict.get('category')),
+                        'has_description': bool(opportunity_dict.get('description')),
+                        'source': opportunity_dict.get('source'),
+                        'source_id': opportunity_dict.get('source_id')
+                    },
+                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
+                }) + '\n')
+        except: pass
+        # #endregion
+        
+        # Validate required fields before creating
+        title = opportunity_dict.get('title', '').strip()
+        company = opportunity_dict.get('company', '').strip()
+        location = opportunity_dict.get('location', '').strip()
+        description = opportunity_dict.get('description', '').strip()
+        
+        if not title:
+            raise ValueError("Title is required but was empty")
+        if not company:
+            raise ValueError("Company is required but was empty")
+        if not location:
+            raise ValueError("Location is required but was empty")
+        if not description:
+            # Description is required in the model, use a default if missing
+            description = "No description provided"
+            print(f"WARNING: Empty description for opportunity '{title[:50]}', using default")
+        
+        # Create new opportunity
         new_opp = Opportunity(
-            title=opportunity_dict.get('title', ''),
-            company=opportunity_dict.get('company', ''),
-            location=opportunity_dict.get('location', ''),
+            title=title,
+            company=company,
+            location=location,
             type=opportunity_dict.get('type', 'job'),
             category=opportunity_dict.get('category', 'General'),
-            description=opportunity_dict.get('description', ''),
+            description=description,
             requirements=opportunity_dict.get('requirements'),
             salary=opportunity_dict.get('salary'),
             application_url=opportunity_dict.get('application_url'),
@@ -351,19 +445,36 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
             db.session.commit()
         except Exception as db_err:
             # #region agent log
+            import traceback
+            error_traceback = traceback.format_exc()
             try:
                 with open(log_path, 'a') as f:
                     f.write(json.dumps({
                         'sessionId': 'debug-session',
                         'runId': 'run1',
-                        'hypothesisId': 'C',
-                        'location': 'deduplicator.py:205',
+                        'hypothesisId': 'C,D',
+                        'location': 'deduplicator.py:352',
                         'message': 'Database commit error (new)',
-                        'data': {'error': str(db_err), 'error_type': type(db_err).__name__},
+                        'data': {
+                            'error': str(db_err),
+                            'error_type': type(db_err).__name__,
+                            'error_traceback': error_traceback[:500],
+                            'opp_title': opportunity_dict.get('title', '')[:50],
+                            'opp_source': opportunity_dict.get('source'),
+                            'opp_source_id': opportunity_dict.get('source_id')
+                        },
                         'timestamp': int(datetime.utcnow().timestamp() * 1000)
                     }) + '\n')
             except: pass
             # #endregion
+            # Print detailed error to stdout (visible in Vercel logs)
+            print(f"ERROR committing new opportunity to database:")
+            print(f"  Title: {opportunity_dict.get('title', '')[:50]}")
+            print(f"  Source: {opportunity_dict.get('source')}, Source ID: {opportunity_dict.get('source_id')}")
+            print(f"  Error Type: {type(db_err).__name__}")
+            print(f"  Error Message: {str(db_err)}")
+            print(f"  Full Traceback:")
+            print(error_traceback)
             db.session.rollback()
             raise
         
