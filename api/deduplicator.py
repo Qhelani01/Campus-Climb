@@ -75,6 +75,10 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
     db = get_db()
     Opportunity = get_opportunity_model()
     
+    # Import retry-related modules once
+    from sqlalchemy.exc import TimeoutError, OperationalError
+    import time
+    
     source = opportunity_dict.get('source')
     source_id = opportunity_dict.get('source_id')
     title = opportunity_dict.get('title', '').strip()
@@ -87,32 +91,90 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
     # First, try exact match by source + source_id
     if source and source_id:
         # Use db.session.query() instead of Opportunity.query to avoid app context issues
-        existing = db.session.query(Opportunity).filter_by(
-            source=source,
-            source_id=source_id,
-            is_deleted=False
-        ).first()
+        # Add retry logic for connection pool exhaustion
         
-        if existing:
-            print(f"DEDUP MATCH: Found existing by source+source_id: ID={existing.id}")
-            return existing, True
+        max_retries = 3
+        retry_delay = 0.5  # Start with 500ms delay
+        
+        for attempt in range(max_retries):
+            try:
+                existing = db.session.query(Opportunity).filter_by(
+                    source=source,
+                    source_id=source_id,
+                    is_deleted=False
+                ).first()
+                
+                # Release connection immediately after query
+                db.session.close()
+                
+                if existing:
+                    print(f"DEDUP MATCH: Found existing by source+source_id: ID={existing.id}")
+                    return existing, True
+                break  # Success, exit retry loop
+            except (TimeoutError, OperationalError) as conn_err:
+                error_msg = str(conn_err)
+                if 'QueuePool' in error_msg or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        print(f"Connection pool exhausted (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        # Force cleanup before retry
+                        try:
+                            db.session.rollback()
+                            db.session.close()
+                        except: pass
+                        continue
+                    else:
+                        # All retries exhausted
+                        raise
+                else:
+                    raise  # Re-raise other operational errors
     
     # Second, try fuzzy match by title + company + type
     if title and company:
         # Use db.session.query() instead of Opportunity.query to avoid app context issues
-        existing = db.session.query(Opportunity).filter(
-            Opportunity.title.ilike(f'%{title}%'),
-            Opportunity.company.ilike(f'%{company}%'),
-            Opportunity.type == opp_type,
-            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
-        ).first()
+        # Add retry logic for connection pool exhaustion
         
-        if existing:
-            # Check similarity (simple check - titles are very similar)
-            is_similar = titles_similar(title, existing.title)
-            print(f"DEDUP FUZZY: Found existing by title+company, similarity={is_similar}, existing_id={existing.id}")
-            if is_similar:
-                return existing, True
+        max_retries = 3
+        retry_delay = 0.5  # Start with 500ms delay
+        
+        for attempt in range(max_retries):
+            try:
+                existing = db.session.query(Opportunity).filter(
+                    Opportunity.title.ilike(f'%{title}%'),
+                    Opportunity.company.ilike(f'%{company}%'),
+                    Opportunity.type == opp_type,
+                    (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+                ).first()
+                
+                # Release connection immediately after query
+                db.session.close()
+                
+                if existing:
+                    # Check similarity (simple check - titles are very similar)
+                    is_similar = titles_similar(title, existing.title)
+                    print(f"DEDUP FUZZY: Found existing by title+company, similarity={is_similar}, existing_id={existing.id}")
+                    if is_similar:
+                        return existing, True
+                break  # Success, exit retry loop
+            except (TimeoutError, OperationalError) as conn_err:
+                error_msg = str(conn_err)
+                if 'QueuePool' in error_msg or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                    if attempt < max_retries - 1:
+                        print(f"Connection pool exhausted (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        # Force cleanup before retry
+                        try:
+                            db.session.rollback()
+                            db.session.close()
+                        except: pass
+                        continue
+                    else:
+                        # All retries exhausted
+                        raise
+                else:
+                    raise  # Re-raise other operational errors
     
     print(f"DEDUP RESULT: No duplicate found, will create new opportunity")
     return None, False
@@ -321,6 +383,8 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
         try:
             db.session.commit()
             print(f"SUCCESS: Updated opportunity ID {existing.id}")
+            # Release connection immediately after commit
+            db.session.close()
         except Exception as db_err:
             # #region agent log
             import traceback
@@ -459,6 +523,8 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
         try:
             db.session.commit()
             print(f"SUCCESS: Created new opportunity ID {new_opp.id if new_opp else 'None'}")
+            # Release connection immediately after commit
+            db.session.close()
         except Exception as db_err:
             # #region agent log
             import traceback

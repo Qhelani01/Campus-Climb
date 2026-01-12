@@ -84,9 +84,11 @@ if is_postgres:
         # Session Pooler allows ~15 connections total, so we limit per instance
         # Use 1 connection per instance to minimize pool usage
         # Multiple instances can share the 15 connection limit
-        engine_options['pool_size'] = 1
-        engine_options['max_overflow'] = 0  # No overflow to prevent exceeding limits
-        engine_options['pool_timeout'] = 30  # Wait max 30 seconds for connection (increased for reliability)
+        # Increase pool slightly to allow for concurrent operations within same instance
+        # Still conservative for Supabase Session Pooler (15 total connections)
+        engine_options['pool_size'] = 2
+        engine_options['max_overflow'] = 1  # Allow 1 overflow for burst traffic
+        engine_options['pool_timeout'] = 10  # Reduced timeout since we have retry logic
         # Close connections after use to return them to pool quickly
         engine_options['pool_reset_on_return'] = 'commit'  # Reset connection state on return
     else:
