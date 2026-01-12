@@ -2,6 +2,12 @@
 
 A modern web application for managing and displaying career opportunities, internships, conferences, workshops, and competitions for WVSU students. Features automated opportunity fetching from multiple sources, intelligent deduplication, and a comprehensive admin panel.
 
+## 📸 Preview
+
+![Campus Climb Landing Page](frontend/screenshot.png)
+
+*Welcome to Campus Climb - Your gateway to career opportunities at WVSU*
+
 ## ✨ Features
 
 ### User Features
