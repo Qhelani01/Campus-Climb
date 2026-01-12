@@ -75,7 +75,21 @@ engine_options = {
 }
 if is_postgres:
     # PostgreSQL-specific options
-    engine_options['pool_recycle'] = 300
+    # For Supabase Session Pooler, limit pool size to avoid "max clients reached" errors
+    # Session Pooler typically allows 15 connections for free tier
+    # Use small pool size for serverless (each function instance gets its own pool)
+    is_vercel = os.environ.get('VERCEL') is not None
+    if is_vercel:
+        # Serverless: use minimal pool size (1-2 connections per function instance)
+        engine_options['pool_size'] = 1
+        engine_options['max_overflow'] = 0  # No overflow connections
+        engine_options['pool_timeout'] = 10  # Wait max 10 seconds for connection
+    else:
+        # Local development: can use more connections
+        engine_options['pool_size'] = 5
+        engine_options['max_overflow'] = 5
+    
+    engine_options['pool_recycle'] = 300  # Recycle connections after 5 minutes
     engine_options['connect_args'] = {'connect_timeout': 10}
 else:
     # SQLite-specific options (if any)

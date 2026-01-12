@@ -380,6 +380,12 @@ def fetch_all_opportunities() -> Dict:
             results['total_updated'] += updated_count
             results['total_errors'] += error_count
             
+            # Close session after processing each fetcher to release connections
+            try:
+                db.session.close()
+            except:
+                pass
+            
         except Exception as e:
             # #region agent log
             try:
