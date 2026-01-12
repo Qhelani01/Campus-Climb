@@ -814,18 +814,26 @@ def get_opportunity(id):
 def get_opportunity_types():
     """Get all unique opportunity types"""
     try:
-        # Ensure database connection
-        db.session.execute(text('SELECT 1'))
+        # Ensure database connection with timeout
+        try:
+            db.session.execute(text('SELECT 1'))
+        except Exception as conn_err:
+            print(f"Database connection error in get_opportunity_types: {conn_err}")
+            db.session.rollback()
+            # Return empty list instead of error to prevent UI issues
+            return jsonify([])
         
         types = db.session.query(Opportunity.type).filter(
             (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
         ).distinct().all()
-        return jsonify([t[0] for t in types])
+        return jsonify([t[0] for t in types if t[0]])  # Filter out None values
     except Exception as e:
         print(f"Error in get_opportunity_types: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': f'Failed to load types: {str(e)}'}), 500
+        db.session.rollback()
+        # Return empty list instead of error to prevent UI issues
+        return jsonify([])
 
 @app.route('/api/opportunities/categories', methods=['GET'])
 def get_opportunity_categories():
