@@ -1452,6 +1452,72 @@ def admin_promote_user():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/debug/check-user', methods=['POST'])
+def debug_check_user():
+    """
+    Debug endpoint to check user data in database.
+    Helps diagnose login issues.
+    """
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        is_postgres = 'postgresql' in str(db.engine.url) or 'postgres' in str(db.engine.url)
+        
+        # Try case-insensitive lookup for PostgreSQL
+        if is_postgres:
+            user = User.query.filter(User.email.ilike(email)).first()
+        else:
+            user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            # Try raw SQL to see if user exists with different casing
+            result = db.session.execute(
+                text("SELECT email, is_admin FROM users WHERE LOWER(email) = LOWER(:email)"),
+                {"email": email}
+            )
+            raw_user = result.fetchone()
+            
+            return jsonify({
+                'user_found': False,
+                'email_queried': email,
+                'is_postgres': is_postgres,
+                'raw_query_result': {
+                    'found': raw_user is not None,
+                    'email': raw_user[0] if raw_user else None,
+                    'is_admin': raw_user[1] if raw_user else None
+                } if raw_user else None,
+                'database_url_preview': str(db.engine.url).split('@')[0] + '@...' if '@' in str(db.engine.url) else 'sqlite'
+            }), 200
+        
+        # User found
+        user_is_admin = bool(user.is_admin) if user.is_admin is not None else False
+        
+        return jsonify({
+            'user_found': True,
+            'email_queried': email,
+            'user_email': user.email,
+            'user_id': user.id,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'is_admin': user_is_admin,
+            'is_admin_raw': user.is_admin,
+            'is_admin_type': type(user.is_admin).__name__,
+            'has_password_hash': bool(user.password_hash),
+            'is_postgres': is_postgres,
+            'email_match': user.email.lower() == email.lower()
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
 @app.route('/api/setup/admin', methods=['POST'])
 def setup_admin_user():
     """
