@@ -1411,6 +1411,8 @@ def admin_fetch_opportunities():
         })
     except Exception as e:
         # #region agent log
+        import traceback
+        error_traceback = traceback.format_exc()
         try:
             import json
             from datetime import datetime
@@ -1420,17 +1422,25 @@ def admin_fetch_opportunities():
                     'sessionId': 'debug-session',
                     'runId': 'admin-ui-test',
                     'hypothesisId': 'E',
-                    'location': 'index.py:1025',
+                    'location': 'index.py:1430',
                     'message': 'admin_fetch_opportunities error',
-                    'data': {'error': str(e), 'error_type': type(e).__name__},
+                    'data': {
+                        'error': str(e),
+                        'error_type': type(e).__name__,
+                        'error_traceback': error_traceback[:1000]
+                    },
                     'timestamp': int(datetime.utcnow().timestamp() * 1000)
                 }) + '\n')
         except: pass
         # #endregion
-        print(f"Error in admin fetch opportunities: {e}")
-        import traceback
+        print(f"ERROR in admin fetch opportunities: {e}")
+        print(f"Full traceback:")
         traceback.print_exc()
-        return jsonify({'error': f'Failed to fetch opportunities: {str(e)}'}), 500
+        # Always return JSON, never HTML
+        return jsonify({
+            'error': f'Failed to fetch opportunities: {str(e)}',
+            'error_type': type(e).__name__
+        }), 500
 
 @app.route('/api/admin/fetch-logs', methods=['GET'])
 @admin_required
