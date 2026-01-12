@@ -72,9 +72,9 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
         Tuple of (existing_opportunity_or_None, is_duplicate)
     """
     if db is None:
-        db = get_db()
+    db = get_db()
     if Opportunity is None:
-        Opportunity = get_opportunity_model()
+    Opportunity = get_opportunity_model()
     
     source = opportunity_dict.get('source')
     source_id = opportunity_dict.get('source_id')
@@ -180,9 +180,9 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
     # #endregion
     
     if db is None:
-        db = get_db()
+    db = get_db()
     if Opportunity is None:
-        Opportunity = get_opportunity_model()
+    Opportunity = get_opportunity_model()
     
     # #region agent log
     try:
@@ -238,19 +238,27 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
             f.write(json.dumps({
                 'sessionId': 'debug-session',
                 'runId': 'run1',
-                'hypothesisId': 'C',
-                'location': 'deduplicator.py:220',
+                'hypothesisId': 'C,F',
+                'location': 'deduplicator.py:235',
                 'message': 'After deduplicate_opportunity',
                 'data': {
                     'is_duplicate': is_duplicate,
                     'existing_id': existing.id if existing else None,
                     'will_update': is_duplicate and existing is not None,
-                    'will_create': not is_duplicate
+                    'will_create': not is_duplicate,
+                    'source': opportunity_dict.get('source'),
+                    'source_id': opportunity_dict.get('source_id'),
+                    'has_source': bool(opportunity_dict.get('source')),
+                    'has_source_id': bool(opportunity_dict.get('source_id')),
+                    'title': opportunity_dict.get('title', '')[:50]
                 },
                 'timestamp': int(datetime.utcnow().timestamp() * 1000)
             }) + '\n')
     except: pass
     # #endregion
+    
+    # Print to stdout for Vercel logs
+    print(f"DEDUP RESULT: is_duplicate={is_duplicate}, existing_id={existing.id if existing else None}, will_create={not is_duplicate}, source={opportunity_dict.get('source')}, source_id={opportunity_dict.get('source_id')}")
     
     if is_duplicate and existing:
         # #region agent log
@@ -306,7 +314,7 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
         # #endregion
         
         try:
-            db.session.commit()
+        db.session.commit()
         except Exception as db_err:
             # #region agent log
             import traceback
@@ -444,6 +452,8 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
         db.session.add(new_opp)
         try:
             db.session.commit()
+            print(f"SUCCESS: Created new opportunity ID {new_opp.id if new_opp else 'None'}")
+            print(f"SUCCESS: Created new opportunity ID {new_opp.id if new_opp else 'None'}")
         except Exception as db_err:
             # #region agent log
             import traceback
@@ -454,7 +464,7 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
                         'sessionId': 'debug-session',
                         'runId': 'run1',
                         'hypothesisId': 'C,D',
-                        'location': 'deduplicator.py:352',
+                        'location': 'deduplicator.py:446',
                         'message': 'Database commit error (new)',
                         'data': {
                             'error': str(db_err),
@@ -486,7 +496,7 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
                     'sessionId': 'debug-session',
                     'runId': 'run1',
                     'hypothesisId': 'C',
-                    'location': 'deduplicator.py:217',
+                    'location': 'deduplicator.py:490',
                     'message': 'After db.session.commit (new)',
                     'data': {'new_opp_id': new_opp.id if new_opp else None},
                     'timestamp': int(datetime.utcnow().timestamp() * 1000)
