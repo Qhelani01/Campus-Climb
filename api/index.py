@@ -80,10 +80,14 @@ if is_postgres:
     # Use small pool size for serverless (each function instance gets its own pool)
     is_vercel = os.environ.get('VERCEL') is not None
     if is_vercel:
-        # Serverless: use minimal pool size (1-2 connections per function instance)
-        engine_options['pool_size'] = 1
-        engine_options['max_overflow'] = 0  # No overflow connections
-        engine_options['pool_timeout'] = 10  # Wait max 10 seconds for connection
+        # Serverless: use small pool size to avoid exhausting Supabase Session Pooler
+        # Session Pooler allows ~15 connections total, so we limit per instance
+        # Allow 2 connections per instance to handle concurrent requests without blocking
+        engine_options['pool_size'] = 2
+        engine_options['max_overflow'] = 1  # Allow 1 overflow connection if needed
+        engine_options['pool_timeout'] = 20  # Wait max 20 seconds for connection
+        # Close connections after use to return them to pool quickly
+        engine_options['pool_reset_on_return'] = 'commit'  # Reset connection state on return
     else:
         # Local development: can use more connections
         engine_options['pool_size'] = 5
@@ -827,18 +831,26 @@ def get_opportunity_types():
 def get_opportunity_categories():
     """Get all unique opportunity categories"""
     try:
-        # Ensure database connection
-        db.session.execute(text('SELECT 1'))
+        # Ensure database connection with timeout
+        try:
+            db.session.execute(text('SELECT 1'))
+        except Exception as conn_err:
+            print(f"Database connection error in get_opportunity_categories: {conn_err}")
+            db.session.rollback()
+            # Return empty list instead of error to prevent UI issues
+            return jsonify([])
         
         categories = db.session.query(Opportunity.category).filter(
             (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
         ).distinct().all()
-        return jsonify([c[0] for c in categories])
+        return jsonify([c[0] for c in categories if c[0]])  # Filter out None values
     except Exception as e:
         print(f"Error in get_opportunity_categories: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': f'Failed to load categories: {str(e)}'}), 500
+        db.session.rollback()
+        # Return empty list instead of error to prevent UI issues
+        return jsonify([])
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
