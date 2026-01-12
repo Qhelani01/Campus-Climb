@@ -82,6 +82,9 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
     company = opportunity_dict.get('company', '').strip()
     opp_type = opportunity_dict.get('type', '')
     
+    # Log what we're checking
+    print(f"DEDUP CHECK: source={source}, source_id={source_id}, title={title[:50]}, company={company[:30]}")
+    
     # First, try exact match by source + source_id
     if source and source_id:
         # Use db.session.query() instead of Opportunity.query to avoid app context issues
@@ -92,6 +95,7 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
         ).first()
         
         if existing:
+            print(f"DEDUP MATCH: Found existing by source+source_id: ID={existing.id}")
             return existing, True
     
     # Second, try fuzzy match by title + company + type
@@ -106,9 +110,12 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
         
         if existing:
             # Check similarity (simple check - titles are very similar)
-            if titles_similar(title, existing.title):
+            is_similar = titles_similar(title, existing.title)
+            print(f"DEDUP FUZZY: Found existing by title+company, similarity={is_similar}, existing_id={existing.id}")
+            if is_similar:
                 return existing, True
     
+    print(f"DEDUP RESULT: No duplicate found, will create new opportunity")
     return None, False
 
 
