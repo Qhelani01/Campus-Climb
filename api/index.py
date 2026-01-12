@@ -907,10 +907,35 @@ def login():
         try:
             db.session.execute(text('SELECT 1'))
         except Exception as conn_error:
-            print(f"Database connection error: {conn_error}")
+            error_msg = str(conn_error)
+            print(f"Database connection error: {error_msg}")
             import traceback
             traceback.print_exc()
-            return jsonify({'error': 'Database connection failed. Please try again later.'}), 500
+            
+            # Check if DATABASE_URL is set
+            has_db_url = bool(os.environ.get('DATABASE_URL'))
+            db_url_preview = os.environ.get('DATABASE_URL', 'NOT SET')[:50] + '...' if os.environ.get('DATABASE_URL') else 'NOT SET'
+            
+            # Return more helpful error message
+            if not has_db_url:
+                return jsonify({
+                    'error': 'Database connection failed: DATABASE_URL environment variable is not set. Please configure it in Vercel.',
+                    'debug': {
+                        'has_database_url': False,
+                        'is_vercel': os.environ.get('VERCEL') is not None
+                    }
+                }), 500
+            else:
+                # Don't expose full connection string, but show if it's configured
+                return jsonify({
+                    'error': 'Database connection failed. Please check your DATABASE_URL configuration.',
+                    'debug': {
+                        'has_database_url': True,
+                        'is_vercel': os.environ.get('VERCEL') is not None,
+                        'error_type': type(conn_error).__name__,
+                        'error_preview': error_msg[:100] if len(error_msg) > 100 else error_msg
+                    }
+                }), 500
 
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()
