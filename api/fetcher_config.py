@@ -19,11 +19,14 @@ class FetcherConfig:
     # Default RSS feeds (no auth needed)
     # Note: GitHub Jobs was shut down, Stack Overflow blocks bots
     # Using Reddit feeds which are more accessible
+    # Focus on subreddits that have actual job postings (not "for hire" posts)
     DEFAULT_RSS_FEEDS = [
         'https://stackoverflow.com/jobs/feed',  # May be blocked, but worth trying
-        'https://www.reddit.com/r/forhire/.rss',  # Reddit forhire subreddit
-        'https://www.reddit.com/r/jobbit/.rss',   # Reddit job board
+        'https://www.reddit.com/r/jobbit/.rss',   # Reddit job board (more job postings)
         'https://www.reddit.com/r/remotejs/.rss', # Remote JS jobs
+        'https://www.reddit.com/r/jobopenings/.rss',  # Job openings subreddit
+        'https://www.reddit.com/r/internships/.rss',  # Internships subreddit
+        # Note: /r/forhire is excluded as it has too many "for hire" posts mixed with actual opportunities
     ]
     
     # Enabled fetchers (comma-separated list)

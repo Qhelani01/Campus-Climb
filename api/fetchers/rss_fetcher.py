@@ -331,20 +331,119 @@ class RedditJobsFetcher(RSSFetcher):
             source_name=f'reddit_{subreddit}'
         )
     
+    def parse_entry(self, entry: Dict) -> Optional[Dict]:
+        """Parse a single RSS entry, filtering out 'For Hire' posts"""
+        # First check if this is an actual opportunity (not someone looking for work)
+        title = entry.get('title', '').strip()
+        if not title:
+            return None
+        
+        # Get description for filtering
+        description = ''
+        if 'summary' in entry:
+            description = entry.summary
+        elif 'description' in entry:
+            description = entry.description
+        elif 'content' in entry and len(entry.content) > 0:
+            description = entry.content[0].get('value', '')
+        
+        description = self.clean_html(description)
+        combined_text = (title + ' ' + description).lower()
+        
+        # Filter out posts from people looking for work
+        exclude_patterns = [
+            '[for hire]', '[for hire', 'for hire]', 'for hire',
+            '[for-hire]', 'for-hire',
+            'seeking', 'looking for', 'available for',
+            'i am', 'i\'m looking', 'i need',
+            'hire me', 'hire us',
+            'freelancer available', 'developer available',
+            'open to work', 'open for work',
+            'job seeker', 'jobseeker',
+            'resume', 'portfolio', 'cv',
+            'can help', 'can assist', 'i can',
+            'my services', 'my skills',
+        ]
+        
+        # Check if title/description contains exclusion patterns
+        for pattern in exclude_patterns:
+            if pattern in combined_text:
+                # Double-check: make sure it's not a hiring post that mentions "for hire" in a different context
+                # If it contains [HIRING] or [Hiring], it's likely an opportunity
+                if '[hiring]' in combined_text or '[hiring' in combined_text:
+                    break  # It's a hiring post, keep it
+                return None  # It's a "for hire" post, skip it
+        
+        # Only include posts that are actual opportunities
+        # Look for hiring indicators
+        hiring_patterns = [
+            '[hiring]', '[hiring', 'hiring]',
+            '[hiring:', 'hiring:',
+            'we are hiring', 'we\'re hiring',
+            'now hiring', 'currently hiring',
+            'job opening', 'job opportunity',
+            'position available', 'positions available',
+            'looking to hire', 'looking for a',
+            'internship', 'intern position',
+            'entry level', 'junior',
+            'full-time', 'part-time',
+            'remote position', 'remote role',
+        ]
+        
+        # Check if it contains hiring indicators
+        is_opportunity = any(pattern in combined_text for pattern in hiring_patterns)
+        
+        # If no clear hiring indicator, but also no exclusion pattern, 
+        # check if it's from a job-focused subreddit (might be worth including)
+        if not is_opportunity:
+            # For job-focused subreddits, be more lenient
+            job_subreddits = ['jobbit', 'jobs', 'jobopenings', 'hiring']
+            if any(sub in self.source_name.lower() for sub in job_subreddits):
+                # If it doesn't have exclusion patterns, include it
+                pass  # Will continue to parse
+            else:
+                # For other subreddits, require clear hiring indicator
+                return None
+        
+        # Call parent parse_entry to process the valid opportunity
+        return super().parse_entry(entry)
+    
     def extract_company(self, entry: Dict, title: str) -> str:
         """Reddit posts don't have company info, extract from title or use subreddit"""
         # Try to extract from title (e.g., "[Hiring] Company Name - Position")
         if ' - ' in title:
             parts = title.split(' - ')
             if len(parts) > 1:
-                return parts[0].replace('[Hiring]', '').replace('[For Hire]', '').strip()
+                # Remove hiring tags and clean up
+                company_part = parts[0].replace('[Hiring]', '').replace('[HIRING]', '').replace('[hiring]', '').strip()
+                if company_part and company_part != title:
+                    return company_part
+        # Try to extract company from @ mentions (e.g., "@CompanyName")
+        import re
+        at_mention = re.search(r'@([A-Z][a-zA-Z0-9]+)', title)
+        if at_mention:
+            return at_mention.group(1)
         return 'Various Companies'
     
     def determine_type(self, title: str, description: str, source: str) -> str:
-        """Reddit job posts are typically jobs or freelance"""
+        """Determine opportunity type from title and description"""
         text = (title + ' ' + description).lower()
-        if 'freelance' in text or 'contract' in text:
-            return 'job'  # Still a job, just contract-based
+        
+        # Check for internship keywords first
+        if any(keyword in text for keyword in ['internship', 'intern', 'intern position', 'student position']):
+            return 'internship'
+        
+        # Check for workshop/conference
+        if any(keyword in text for keyword in ['workshop', 'conference', 'seminar', 'webinar']):
+            if 'conference' in text:
+                return 'conference'
+            return 'workshop'
+        
+        # Check for competition/hackathon
+        if any(keyword in text for keyword in ['hackathon', 'competition', 'contest', 'challenge']):
+            return 'competition'
+        
+        # Default to job
         return 'job'
     
     def determine_type(self, title: str, description: str, source: str) -> str:
