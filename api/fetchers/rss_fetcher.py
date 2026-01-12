@@ -445,6 +445,18 @@ class RedditJobsFetcher(RSSFetcher):
         
         # Default to job
         return 'job'
+
+
+class EventbriteFetcher(RSSFetcher):
+    """Fetcher for Eventbrite RSS feeds"""
+    
+    def __init__(self, feed_url: str = None):
+        # Eventbrite category feeds (example - can be customized)
+        default_url = 'https://www.eventbrite.com/rss'
+        super().__init__(
+            feed_url=feed_url or default_url,
+            source_name='eventbrite'
+        )
     
     def determine_type(self, title: str, description: str, source: str) -> str:
         """Eventbrite events are typically workshops or conferences"""
@@ -455,6 +467,8 @@ class RedditJobsFetcher(RSSFetcher):
             return 'workshop'
         elif 'competition' in text or 'hackathon' in text:
             return 'competition'
+        elif 'internship' in text or 'intern' in text:
+            return 'internship'
         else:
             return 'workshop'
 
