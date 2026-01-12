@@ -87,14 +87,8 @@ def fetch_all_opportunities() -> Dict:
     FetcherConfig = get_fetcher_config()
     fetcher_classes = get_fetchers()
     
-    # Import db and Opportunity from index to ensure we use the same instances
-    # Since scheduler.py is in the api directory, we can import directly
-    from index import db, Opportunity
-    
-    # Get the deduplicator function and wrap it to pass db and Opportunity
-    from deduplicator import save_or_update_opportunity as _save_or_update_opportunity
-    def save_or_update_opportunity(opp_dict):
-        return _save_or_update_opportunity(opp_dict, db=db, Opportunity=Opportunity)
+    # Import deduplicator function - it will get db and Opportunity from Flask app context
+    from deduplicator import save_or_update_opportunity
     
     # #region agent log
     try:
@@ -379,12 +373,6 @@ def fetch_all_opportunities() -> Dict:
             results['total_new'] += new_count
             results['total_updated'] += updated_count
             results['total_errors'] += error_count
-            
-            # Close session after processing each fetcher to release connections
-            try:
-                db.session.close()
-            except:
-                pass
             
         except Exception as e:
             # #region agent log

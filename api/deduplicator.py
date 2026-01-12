@@ -65,16 +65,15 @@ def deduplicate_opportunity(opportunity_dict: Dict, db=None, Opportunity=None) -
     
     Args:
         opportunity_dict: Dictionary with opportunity data including source and source_id
-        db: SQLAlchemy database instance (optional, will be retrieved if not provided)
-        Opportunity: Opportunity model class (optional, will be retrieved if not provided)
+        db: SQLAlchemy database instance (ignored - always retrieved from Flask app context)
+        Opportunity: Opportunity model class (ignored - always retrieved from Flask app context)
     
     Returns:
         Tuple of (existing_opportunity_or_None, is_duplicate)
     """
-    if db is None:
-        db = get_db()
-    if Opportunity is None:
-        Opportunity = get_opportunity_model()
+    # Always get db and Opportunity from Flask app context to ensure they're bound correctly
+    db = get_db()
+    Opportunity = get_opportunity_model()
     
     source = opportunity_dict.get('source')
     source_id = opportunity_dict.get('source_id')
@@ -186,10 +185,9 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
     except: pass
     # #endregion
     
-    if db is None:
-        db = get_db()
-    if Opportunity is None:
-        Opportunity = get_opportunity_model()
+    # Always get db and Opportunity from Flask app context to ensure they're bound correctly
+    db = get_db()
+    Opportunity = get_opportunity_model()
     
     # #region agent log
     try:
