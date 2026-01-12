@@ -970,18 +970,40 @@ def login():
         print(f"DEBUG LOG ERROR: {log_err}")
     # #endregion
     try:
-        # Ensure database connection
-        try:
-            db.session.execute(text('SELECT 1'))
-        except Exception as conn_error:
+        # Ensure database connection with retry logic
+        connection_attempts = 0
+        max_attempts = 3
+        conn_error = None
+        
+        while connection_attempts < max_attempts:
+            try:
+                db.session.execute(text('SELECT 1'))
+                break  # Connection successful
+            except Exception as e:
+                connection_attempts += 1
+                conn_error = e
+                error_msg = str(e)
+                
+                # Check if it's a pool exhaustion error
+                if 'MaxClientsInSessionMode' in error_msg or 'max clients' in error_msg.lower():
+                    if connection_attempts < max_attempts:
+                        print(f"Connection pool exhausted, retrying ({connection_attempts}/{max_attempts})...")
+                        import time
+                        time.sleep(1)  # Wait 1 second before retry
+                        continue
+                
+                # For other errors, don't retry
+                break
+        
+        # If all retries failed, return error
+        if connection_attempts >= max_attempts:
             error_msg = str(conn_error)
-            print(f"Database connection error: {error_msg}")
+            print(f"Database connection error after {max_attempts} attempts: {error_msg}")
             import traceback
             traceback.print_exc()
             
             # Check if DATABASE_URL is set
             has_db_url = bool(os.environ.get('DATABASE_URL'))
-            db_url_preview = os.environ.get('DATABASE_URL', 'NOT SET')[:50] + '...' if os.environ.get('DATABASE_URL') else 'NOT SET'
             
             # Return more helpful error message
             if not has_db_url:
@@ -993,16 +1015,28 @@ def login():
                     }
                 }), 500
             else:
-                # Don't expose full connection string, but show if it's configured
-                return jsonify({
-                    'error': 'Database connection failed. Please check your DATABASE_URL configuration.',
-                    'debug': {
-                        'has_database_url': True,
-                        'is_vercel': os.environ.get('VERCEL') is not None,
-                        'error_type': type(conn_error).__name__,
-                        'error_preview': error_msg[:100] if len(error_msg) > 100 else error_msg
-                    }
-                }), 500
+                # Check if it's a pool exhaustion error
+                if 'MaxClientsInSessionMode' in error_msg or 'max clients' in error_msg.lower():
+                    return jsonify({
+                        'error': 'Database connection pool exhausted. Please try again in a few moments.',
+                        'debug': {
+                            'has_database_url': True,
+                            'is_vercel': os.environ.get('VERCEL') is not None,
+                            'error_type': 'PoolExhaustion',
+                            'retries': max_attempts
+                        }
+                    }), 503  # Service Unavailable
+                else:
+                    # Don't expose full connection string, but show if it's configured
+                    return jsonify({
+                        'error': 'Database connection failed. Please check your DATABASE_URL configuration.',
+                        'debug': {
+                            'has_database_url': True,
+                            'is_vercel': os.environ.get('VERCEL') is not None,
+                            'error_type': type(conn_error).__name__,
+                            'error_preview': error_msg[:100] if len(error_msg) > 100 else error_msg
+                        }
+                    }), 500
 
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()
