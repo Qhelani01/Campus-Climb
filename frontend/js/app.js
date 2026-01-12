@@ -952,9 +952,16 @@ class CampusClimbApp {
         if (fetchStatus) fetchStatus.classList.add('hidden');
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/fetch-opportunities`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/fetch-opportunities?email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/fetch-opportunities`;
+            
+            const response = await fetch(url, {
                 method: 'POST',
-                credentials: 'include'
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
             
             if (response.ok) {
@@ -1014,7 +1021,11 @@ class CampusClimbApp {
         if (!logsContainer) return;
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/fetch-logs?limit=10`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/fetch-logs?limit=10&email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/fetch-logs?limit=10`;
+            
+            const response = await fetch(url, {
                 credentials: 'include'
             });
             
@@ -1056,7 +1067,11 @@ class CampusClimbApp {
         if (!statusContainer) return;
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/fetchers/status`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/fetchers/status?email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/fetchers/status`;
+            
+            const response = await fetch(url, {
                 credentials: 'include'
             });
             
@@ -1130,7 +1145,11 @@ class CampusClimbApp {
         container.innerHTML = '<p class="text-sm text-gray-500">Loading opportunities...</p>';
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/opportunities?email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/opportunities`;
+            
+            const response = await fetch(url, {
                 credentials: 'include'
             });
             
@@ -1191,7 +1210,11 @@ class CampusClimbApp {
         container.innerHTML = '<p class="text-sm text-gray-500">Loading users...</p>';
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/users`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/users?email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/users`;
+            
+            const response = await fetch(url, {
                 credentials: 'include'
             });
             
@@ -1243,7 +1266,11 @@ class CampusClimbApp {
         }
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities/${id}`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/opportunities/${id}?email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/opportunities/${id}`;
+            
+            const response = await fetch(url, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -1264,7 +1291,11 @@ class CampusClimbApp {
     
     async restoreOpportunity(id) {
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities/${id}`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/opportunities/${id}?email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/opportunities/${id}`;
+            
+            const response = await fetch(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -1301,7 +1332,11 @@ class CampusClimbApp {
         }
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/promote`, {
+            // Get current user email from localStorage for serverless session fallback
+            const currentUserEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = currentUserEmail ? `${this.apiBaseUrl}/admin/promote?email=${encodeURIComponent(currentUserEmail)}` : `${this.apiBaseUrl}/admin/promote`;
+            
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -1360,7 +1395,11 @@ class CampusClimbApp {
         };
         
         try {
-            const response = await fetch(`${this.apiBaseUrl}/admin/opportunities`, {
+            // Get user email from localStorage for serverless session fallback
+            const userEmail = localStorage.getItem('userEmail') || this.currentUser?.email;
+            const url = userEmail ? `${this.apiBaseUrl}/admin/opportunities?email=${encodeURIComponent(userEmail)}` : `${this.apiBaseUrl}/admin/opportunities`;
+            
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',

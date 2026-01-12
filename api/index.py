@@ -197,23 +197,55 @@ def is_wvsu_email(email):
 
 def get_current_user():
     """Get current user from session or email parameter"""
-    from flask import session
+    from flask import session, request as flask_request
+    
+    # Try to get user from session first
     user_id = session.get('user_id')
-    email = request.args.get('email')  # Fallback for serverless
-    
     if user_id:
-        user = User.query.get(user_id)
-        if user:
-            return user
+        try:
+            user = User.query.get(user_id)
+            if user:
+                return user
+        except Exception as e:
+            print(f"Error getting user by ID {user_id}: {e}")
     
-    # Fallback: if email provided (serverless), validate user exists
+    # Fallback 1: Check email in request args (for serverless)
+    email = flask_request.args.get('email')
     if email:
-        user = User.query.filter_by(email=email.lower().strip()).first()
-        if user:
-            # Create session for future requests
-            session['user_id'] = user.id
-            session['email'] = user.email
-            return user
+        try:
+            user = User.query.filter_by(email=email.lower().strip()).first()
+            if user:
+                # Try to create session for future requests
+                try:
+                    session['user_id'] = user.id
+                    session['email'] = user.email
+                except Exception as session_error:
+                    print(f"Warning: Could not set session: {session_error}")
+                return user
+        except Exception as e:
+            print(f"Error getting user by email from args: {e}")
+    
+    # Fallback 2: Check email in request JSON body (for POST requests)
+    if flask_request.is_json:
+        email = flask_request.json.get('email') if flask_request.json else None
+        if email:
+            try:
+                user = User.query.filter_by(email=email.lower().strip()).first()
+                if user:
+                    try:
+                        session['user_id'] = user.id
+                        session['email'] = user.email
+                    except Exception as session_error:
+                        print(f"Warning: Could not set session: {session_error}")
+                    return user
+            except Exception as e:
+                print(f"Error getting user by email from JSON: {e}")
+    
+    # Fallback 3: Check Authorization header (if frontend sends email)
+    auth_header = flask_request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        # Could implement token-based auth here if needed
+        pass
     
     return None
 
