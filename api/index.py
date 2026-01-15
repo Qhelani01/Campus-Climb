@@ -16,6 +16,12 @@ from functools import wraps
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_assistant import generate_application_advice
+from schemas import (
+    RegisterSchema, LoginSchema, OpportunityCreateSchema, OpportunityUpdateSchema,
+    UserProfileUpdateSchema, AdminPromoteSchema, SetupAdminSchema,
+    OpportunityQuerySchema, AIAdviceRequestSchema
+)
+from marshmallow import ValidationError as MarshmallowValidationError
 
 # Import scheduler functions lazily to avoid circular imports
 def get_fetch_functions():
@@ -273,6 +279,9 @@ def validate_password(password):
     - At least one uppercase letter
     - At least one lowercase letter
     - At least one digit
+    
+    Note: This function is kept for backward compatibility.
+    New code should use Marshmallow schemas for validation.
     """
     if not password or len(password) < 8:
         return False, "Password must be at least 8 characters long"
@@ -287,6 +296,34 @@ def validate_password(password):
         return False, "Password must contain at least one digit"
     
     return True, None
+
+def validate_request(schema_class):
+    """
+    Decorator to validate request data using Marshmallow schemas.
+    
+    Usage:
+        @validate_request(RegisterSchema)
+        def register():
+            data = request.validated_data  # Validated and cleaned data
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            try:
+                schema = schema_class()
+                data = request.get_json() or {}
+                validated_data = schema.load(data)
+                # Store validated data in request object for easy access
+                request.validated_data = validated_data
+                return f(*args, **kwargs)
+            except MarshmallowValidationError as err:
+                # Return first error message for simplicity
+                error_message = list(err.messages.values())[0][0] if err.messages else 'Validation failed'
+                return jsonify({'error': error_message, 'details': err.messages}), 400
+            except Exception as e:
+                return jsonify({'error': f'Validation error: {str(e)}'}), 400
+        return decorated_function
+    return decorator
 
 def get_current_user():
     """Get current user from session or email parameter"""
@@ -778,6 +815,14 @@ def health():
 @app.route('/api/opportunities', methods=['GET'])
 def opportunities():
     try:
+        # Validate query parameters
+        try:
+            schema = OpportunityQuerySchema()
+            validated_params = schema.load(request.args.to_dict())
+        except MarshmallowValidationError as err:
+            error_message = list(err.messages.values())[0][0] if err.messages else 'Invalid query parameters'
+            return jsonify({'error': error_message, 'details': err.messages}), 400
+        
         # Ensure database connection
         db.session.execute(text('SELECT 1'))
         
@@ -791,9 +836,9 @@ def opportunities():
         query = Opportunity.active_query()
         
         # Filters
-        type_filter = request.args.get('type', '').strip()
-        category_filter = request.args.get('category', '').strip()
-        search_query = request.args.get('search', '').strip()
+        type_filter = validated_params.get('type')
+        category_filter = validated_params.get('category')
+        search_query = validated_params.get('search')
         
         if type_filter:
             query = query.filter(Opportunity.type == type_filter)
@@ -807,9 +852,8 @@ def opportunities():
             )
         
         # Pagination
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
-        per_page = min(per_page, 100)  # Limit max per_page to 100
+        page = validated_params.get('page', 1)
+        per_page = validated_params.get('per_page', 50)
         
         pagination = query.order_by(Opportunity.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
@@ -906,6 +950,7 @@ def get_opportunity_categories():
 
 @app.route('/api/auth/register', methods=['POST'])
 @limiter.limit("5 per minute")
+@validate_request(RegisterSchema)
 def register():
     """Register a new user. Only WVSU emails (@wvstateu.edu) are allowed."""
     try:
@@ -916,22 +961,12 @@ def register():
             print(f"Database connection error: {conn_error}")
             return jsonify({'error': 'Database connection failed. Please try again later.'}), 500
 
-        data = request.get_json() or {}
-        email = (data.get('email') or '').strip().lower()
-        password = data.get('password') or ''
-        first_name = (data.get('first_name') or '').strip()
-        last_name = (data.get('last_name') or '').strip()
-
-        # Validate
-        if not all([email, password, first_name, last_name]):
-            return jsonify({'error': 'All fields are required'}), 400
-        if not is_wvsu_email(email):
-            return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
-        
-        # Validate password strength
-        is_valid, password_error = validate_password(password)
-        if not is_valid:
-            return jsonify({'error': password_error}), 400
+        # Get validated data from schema
+        data = request.validated_data
+        email = data['email'].lower().strip()
+        password = data['password']
+        first_name = data['first_name'].strip()
+        last_name = data['last_name'].strip()
 
         # Check and add is_admin column if missing (migration)
         try:
@@ -1007,6 +1042,7 @@ def register():
 
 @app.route('/api/auth/login', methods=['POST'])
 @limiter.limit("10 per minute")
+@validate_request(LoginSchema)
 def login():
     """Authenticate existing user. Only WVSU emails allowed. No mock users."""
     try:
@@ -1078,9 +1114,10 @@ def login():
                         }
                     }), 500
 
-        data = request.get_json() or {}
-        email = (data.get('email') or '').strip().lower()
-        password = data.get('password') or ''
+        # Get validated data from schema
+        data = request.validated_data
+        email = data['email'].lower().strip()
+        password = data['password']
 
         if not email or not password:
             return jsonify({'error': 'Email and password are required'}), 400
@@ -1200,17 +1237,12 @@ def admin_get_opportunities():
 
 @app.route('/api/admin/opportunities', methods=['POST'])
 @admin_required
+@validate_request(OpportunityCreateSchema)
 def admin_create_opportunity():
     """Create a new opportunity"""
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        required_fields = ['title', 'company', 'location', 'type', 'category', 'description']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'{field} is required'}), 400
+        # Get validated data from schema
+        data = request.validated_data
         
         new_opportunity = Opportunity(
             title=data['title'],
@@ -1221,7 +1253,8 @@ def admin_create_opportunity():
             description=data['description'],
             requirements=data.get('requirements', ''),
             salary=data.get('salary', ''),
-            application_url=data.get('application_url', ''),
+            application_url=data.get('application_url'),
+            deadline=data.get('deadline'),
             is_deleted=False
         )
         
@@ -1238,6 +1271,7 @@ def admin_create_opportunity():
 
 @app.route('/api/admin/opportunities/<int:id>', methods=['PUT'])
 @admin_required
+@validate_request(OpportunityUpdateSchema)
 def admin_update_opportunity(id):
     """Update an opportunity"""
     try:
@@ -1245,25 +1279,30 @@ def admin_update_opportunity(id):
         if not opportunity:
             return jsonify({'error': 'Opportunity not found'}), 404
         
-        data = request.get_json()
-        if data.get('title'):
+        # Get validated data from schema
+        data = request.validated_data
+        
+        # Update only provided fields
+        if 'title' in data:
             opportunity.title = data['title']
-        if data.get('company'):
+        if 'company' in data:
             opportunity.company = data['company']
-        if data.get('location'):
+        if 'location' in data:
             opportunity.location = data['location']
-        if data.get('type'):
+        if 'type' in data:
             opportunity.type = data['type']
-        if data.get('category'):
+        if 'category' in data:
             opportunity.category = data['category']
-        if data.get('description'):
+        if 'description' in data:
             opportunity.description = data['description']
-        if data.get('requirements'):
+        if 'requirements' in data:
             opportunity.requirements = data['requirements']
-        if data.get('salary'):
+        if 'salary' in data:
             opportunity.salary = data['salary']
-        if data.get('application_url'):
+        if 'application_url' in data:
             opportunity.application_url = data['application_url']
+        if 'deadline' in data:
+            opportunity.deadline = data['deadline']
         if 'is_deleted' in data:
             opportunity.is_deleted = bool(data['is_deleted'])
         
@@ -1436,6 +1475,7 @@ def cron_fetch_opportunities():
         return jsonify({'error': f'Cron job failed: {str(e)}'}), 500
 
 @app.route('/api/admin/promote', methods=['POST'])
+@validate_request(AdminPromoteSchema)
 def admin_promote_user():
     """
     Promote a user to admin. 
@@ -1448,15 +1488,13 @@ def admin_promote_user():
         if not admin_secret:
             return jsonify({'error': 'Admin promotion not configured'}), 403
         
-        data = request.get_json() or {}
-        secret_key = data.get('secret_key')
-        email = (data.get('email') or '').strip().lower()
+        # Get validated data from schema
+        data = request.validated_data
+        secret_key = data['secret_key']
+        email = data['email'].lower().strip()
         
-        if not secret_key or secret_key != admin_secret:
+        if secret_key != admin_secret:
             return jsonify({'error': 'Invalid secret key'}), 403
-        
-        if not email:
-            return jsonify({'error': 'Email is required'}), 400
         
         user = User.query.filter_by(email=email).first()
         if not user:
@@ -1549,6 +1587,7 @@ def debug_check_user():
         }), 500
 
 @app.route('/api/setup/admin', methods=['POST'])
+@validate_request(SetupAdminSchema)
 def setup_admin_user():
     """
     One-time setup endpoint to create/update admin user.
@@ -1562,14 +1601,12 @@ def setup_admin_user():
         if setup_token and provided_token != setup_token:
             return jsonify({'error': 'Invalid setup token'}), 401
         
-        data = request.get_json() or {}
-        email = (data.get('email') or '').strip().lower()
-        password = data.get('password') or ''
-        first_name = data.get('first_name') or 'Admin'
-        last_name = data.get('last_name') or 'User'
-        
-        if not email or not password:
-            return jsonify({'error': 'Email and password are required'}), 400
+        # Get validated data from schema
+        data = request.validated_data
+        email = data['email'].lower().strip()
+        password = data['password']
+        first_name = data.get('first_name', 'Admin')
+        last_name = data.get('last_name', 'User')
         
         # Check if user exists
         user = User.query.filter_by(email=email).first()
