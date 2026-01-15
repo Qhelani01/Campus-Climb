@@ -2,11 +2,14 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import text
 import os
 import json
 import sys
+import re
 from datetime import datetime
 from functools import wraps
 
@@ -26,15 +29,40 @@ def get_fetcher_config():
     return fetcher_config.FetcherConfig
 
 app = Flask(__name__)
+
+# Determine allowed origins from environment variable
+# Format: comma-separated list of origins, e.g., "http://localhost:8080,https://yourdomain.com"
+allowed_origins_str = os.environ.get('ALLOWED_ORIGINS', '')
+if allowed_origins_str:
+    allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',') if origin.strip()]
+else:
+    # Default to localhost for development
+    is_vercel = os.environ.get('VERCEL') is not None
+    if is_vercel:
+        # In production, require ALLOWED_ORIGINS to be set
+        allowed_origins = []
+        print("WARNING: ALLOWED_ORIGINS not set in production. CORS will be restrictive.")
+    else:
+        # Development defaults
+        allowed_origins = ["http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:8000"]
+
 # Configure CORS to allow requests from frontend
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:8080", "http://127.0.0.1:8080", "*"],
+        "origins": allowed_origins,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
     }
 })
+
+# Initialize rate limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"  # Use in-memory storage (works for serverless)
+)
 
 # Session configuration
 # Use null sessions for serverless (Vercel) - sessions stored in cookies only
@@ -47,7 +75,21 @@ else:
     # Local development can use filesystem
     app.config['SESSION_TYPE'] = 'filesystem'
 
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
+# Require SECRET_KEY in production
+secret_key = os.environ.get('SECRET_KEY')
+is_vercel = os.environ.get('VERCEL') is not None
+
+if is_vercel and not secret_key:
+    raise ValueError(
+        "SECRET_KEY environment variable is required in production. "
+        "Please set it in your Vercel environment variables."
+    )
+
+if not secret_key:
+    secret_key = 'dev-secret-key-change-in-production'  # Only for local development
+    print("WARNING: Using default SECRET_KEY. Set SECRET_KEY environment variable in production.")
+
+app.config['SECRET_KEY'] = secret_key
 app.config['SESSION_COOKIE_SECURE'] = is_vercel  # HTTPS only in production
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -189,6 +231,13 @@ class Opportunity(db.Model):
         db.Index('idx_opp_active', 'is_deleted', 'type', 'category'),
     )
     
+    @classmethod
+    def active_query(cls):
+        """Return a query filtered to only active (non-deleted) opportunities"""
+        return cls.query.filter(
+            (cls.is_deleted == False) | (cls.is_deleted.is_(None))
+        )
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -215,6 +264,29 @@ class Opportunity(db.Model):
 def is_wvsu_email(email):
     """Check if email ends with @wvstateu.edu"""
     return email.lower().endswith('@wvstateu.edu')
+
+def validate_password(password):
+    """
+    Validate password strength.
+    Requirements:
+    - At least 8 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    """
+    if not password or len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+    
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+    
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one digit"
+    
+    return True, None
 
 def get_current_user():
     """Get current user from session or email parameter"""
@@ -274,24 +346,6 @@ def admin_required(f):
     """Decorator to require admin authentication"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # #region agent log
-        log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
-        try:
-            import json
-            from datetime import datetime
-            with open(log_path, 'a') as f_log:
-                f_log.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'admin-ui-test',
-                    'hypothesisId': 'A',
-                    'location': 'index.py:220',
-                    'message': 'admin_required decorator called',
-                    'data': {'function': f.__name__},
-                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
-                }) + '\n')
-        except: pass
-        # #endregion
-        
         try:
             user = get_current_user()
         except Exception as auth_error:
@@ -303,21 +357,6 @@ def admin_required(f):
                     'details': 'Connection pool exhausted or timeout'
                 }), 503
             return jsonify({'error': f'Authentication failed: {error_msg}'}), 500
-        
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f_log:
-                f_log.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'admin-ui-test',
-                    'hypothesisId': 'A',
-                    'location': 'index.py:227',
-                    'message': 'admin_required auth check',
-                    'data': {'has_user': bool(user), 'is_admin': user.is_admin if user else False},
-                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
-                }) + '\n')
-        except: pass
-        # #endregion
         
         if not user:
             return jsonify({'error': 'Authentication required'}), 401
@@ -668,27 +707,10 @@ def ensure_db_initialized():
 
 @app.route('/api/test', methods=['GET'])
 def test():
-    # Test logging
-    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
-    print("TEST ENDPOINT CALLED")
-    try:
-        import json
-        from datetime import datetime
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'test-endpoint',
-                'hypothesisId': 'A',
-                'location': 'index.py:527',
-                'message': 'Test endpoint called',
-                'data': {},
-                'timestamp': int(datetime.utcnow().timestamp() * 1000)
-            }) + '\n')
-        print("TEST ENDPOINT: Log written successfully")
-    except Exception as e:
-        print(f"DEBUG: Test endpoint logging failed: {e}")
-        import traceback
-        traceback.print_exc()
+    """Test endpoint - only available in development"""
+    # Only allow in development (not on Vercel)
+    if os.environ.get('VERCEL'):
+        return jsonify({'error': 'Not found'}), 404
     
     return jsonify({
         'message': 'API is working!',
@@ -697,40 +719,15 @@ def test():
 
 @app.route('/api/test/admin-fetch', methods=['POST'])
 def test_admin_fetch():
-    """Test endpoint to verify fetch works without auth"""
-    print("=" * 60)
-    print("TEST ADMIN FETCH ENDPOINT CALLED (NO AUTH)")
-    print("=" * 60)
+    """Test endpoint - only available in development"""
+    # Only allow in development (not on Vercel)
+    if os.environ.get('VERCEL'):
+        return jsonify({'error': 'Not found'}), 404
     
-    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
     try:
-        import json
-        from datetime import datetime
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'test-admin-fetch',
-                'hypothesisId': 'A',
-                'location': 'index.py:test_admin_fetch',
-                'message': 'Test admin fetch endpoint called (no auth)',
-                'data': {},
-                'timestamp': int(datetime.utcnow().timestamp() * 1000)
-            }) + '\n')
-        
         fetch_all_opportunities, _ = get_fetch_functions()
         with app.app_context():
             results = fetch_all_opportunities()
-        
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'test-admin-fetch',
-                'hypothesisId': 'A',
-                'location': 'index.py:test_admin_fetch',
-                'message': 'Test admin fetch completed',
-                'data': {'results': results},
-                'timestamp': int(datetime.utcnow().timestamp() * 1000)
-            }) + '\n')
         
         return jsonify({
             'message': 'Test fetch completed',
@@ -744,17 +741,16 @@ def test_admin_fetch():
 
 @app.route('/api/test/register', methods=['POST'])
 def test_register():
-    """Test endpoint to debug registration issues"""
+    """Test endpoint - only available in development"""
+    # Only allow in development (not on Vercel)
+    if os.environ.get('VERCEL'):
+        return jsonify({'error': 'Not found'}), 404
+    
     try:
         data = request.get_json() or {}
-        print(f"Received registration data: {data}")
-        print(f"Request headers: {dict(request.headers)}")
-        print(f"Request origin: {request.headers.get('Origin')}")
-        
         return jsonify({
             'message': 'Test endpoint reached',
-            'received_data': data,
-            'headers': dict(request.headers)
+            'received_data': data
         }), 200
     except Exception as e:
         print(f"Error in test endpoint: {e}")
@@ -791,10 +787,8 @@ def opportunities():
         except Exception as migration_error:
             print(f"Source columns migration check failed (non-critical): {migration_error}")
         
-        # Read from database - include opportunities where is_deleted is False or null
-        query = Opportunity.query.filter(
-            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
-        )
+        # Read from database - use active_query to filter out deleted opportunities
+        query = Opportunity.active_query()
         
         # Filters
         type_filter = request.args.get('type', '').strip()
@@ -812,8 +806,26 @@ def opportunities():
                 Opportunity.description.contains(search_query)
             )
         
-        opportunities = query.order_by(Opportunity.created_at.desc()).all()
-        return jsonify([opp.to_dict() for opp in opportunities])
+        # Pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        per_page = min(per_page, 100)  # Limit max per_page to 100
+        
+        pagination = query.order_by(Opportunity.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return jsonify({
+            'opportunities': [opp.to_dict() for opp in pagination.items],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            }
+        })
     except Exception as e:
         print(f"Error in opportunities endpoint: {e}")
         import traceback
@@ -848,7 +860,11 @@ def get_opportunity_types():
             return jsonify([])
         
         types = db.session.query(Opportunity.type).filter(
-            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+            Opportunity.id.in_(
+                db.session.query(Opportunity.id).filter(
+                    (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+                )
+            )
         ).distinct().all()
         return jsonify([t[0] for t in types if t[0]])  # Filter out None values
     except Exception as e:
@@ -873,7 +889,11 @@ def get_opportunity_categories():
             return jsonify([])
         
         categories = db.session.query(Opportunity.category).filter(
-            (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+            Opportunity.id.in_(
+                db.session.query(Opportunity.id).filter(
+                    (Opportunity.is_deleted == False) | (Opportunity.is_deleted.is_(None))
+                )
+            )
         ).distinct().all()
         return jsonify([c[0] for c in categories if c[0]])  # Filter out None values
     except Exception as e:
@@ -885,6 +905,7 @@ def get_opportunity_categories():
         return jsonify([])
 
 @app.route('/api/auth/register', methods=['POST'])
+@limiter.limit("5 per minute")
 def register():
     """Register a new user. Only WVSU emails (@wvstateu.edu) are allowed."""
     try:
@@ -906,6 +927,11 @@ def register():
             return jsonify({'error': 'All fields are required'}), 400
         if not is_wvsu_email(email):
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
+        
+        # Validate password strength
+        is_valid, password_error = validate_password(password)
+        if not is_valid:
+            return jsonify({'error': password_error}), 400
 
         # Check and add is_admin column if missing (migration)
         try:
@@ -980,18 +1006,9 @@ def register():
         return jsonify({'error': f'Registration failed: {str(e)}'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
+@limiter.limit("10 per minute")
 def login():
     """Authenticate existing user. Only WVSU emails allowed. No mock users."""
-    # #region agent log
-    import json
-    import time
-    try:
-        with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D","location":"index.py:893","message":"LOGIN_ENDPOINT_ENTRY","data":{"timestamp":time.time()*1000},"timestamp":int(time.time()*1000)}) + '\n')
-            f.flush()
-    except Exception as log_err:
-        print(f"DEBUG LOG ERROR: {log_err}")
-    # #endregion
     try:
         # Ensure database connection with retry logic
         connection_attempts = 0
@@ -1064,15 +1081,6 @@ def login():
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()
         password = data.get('password') or ''
-        # #region agent log
-        try:
-            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,F","location":"index.py:918","message":"LOGIN_REQUEST_DATA","data":{"email":email,"password_length":len(password) if password else 0,"raw_email":data.get('email')},"timestamp":int(time.time()*1000)}) + '\n')
-                f.flush()
-        except Exception as log_err:
-            print(f"DEBUG LOG ERROR (REQUEST_DATA): {log_err}")
-        # #endregion
-        print(f"DEBUG: Login attempt for email: {email}")
 
         if not email or not password:
             return jsonify({'error': 'Email and password are required'}), 400
@@ -1094,23 +1102,7 @@ def login():
             else:
                 # SQLite: email is already lowercased, so direct match
                 user = User.query.filter_by(email=email).first()
-            
-            # #region agent log
-            try:
-                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:941","message":"USER_QUERY_RESULT","data":{"user_found":user is not None,"email_queried":email,"user_id":user.id if user else None,"user_email":user.email if user else None,"user_is_admin":user.is_admin if user else None,"is_postgres":is_postgres},"timestamp":int(time.time()*1000)}) + '\n')
-                    f.flush()
-            except Exception as log_err:
-                print(f"DEBUG LOG ERROR (USER_QUERY): {log_err}")
-            # #endregion
-            print(f"DEBUG: User query result - found: {user is not None}, email: {user.email if user else None}, is_admin: {user.is_admin if user else None}, is_postgres: {is_postgres}")
         except Exception as query_error:
-            # #region agent log
-            try:
-                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:922","message":"USER_QUERY_ERROR","data":{"error":str(query_error),"email_queried":email},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             # Check if it's a missing column error
             error_str = str(query_error)
             if ('is_admin' in error_str or 'resume_summary' in error_str or 'skills' in error_str or 'career_goals' in error_str) and 'does not exist' in error_str:
@@ -1133,12 +1125,6 @@ def login():
                 return jsonify({'error': f'Database query error: {str(query_error)}'}), 500
 
         if not user:
-            # #region agent log
-            try:
-                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"index.py:944","message":"USER_NOT_FOUND","data":{"email":email,"is_wvsu":is_wvsu_email(email)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             # User doesn't exist - enforce WVSU email requirement
             if not is_wvsu_email(email):
                 return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
@@ -1146,58 +1132,16 @@ def login():
         
         # User exists - allow admin users regardless of email domain
         # For non-admin users, enforce WVSU email requirement
-        # #region agent log
-        try:
-            # Handle potential None or boolean conversion issues (PostgreSQL might return NULL)
-            is_admin_value = bool(user.is_admin) if user.is_admin is not None else False
-            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:1003","message":"ADMIN_CHECK_BEFORE_VALIDATION","data":{"user_is_admin":is_admin_value,"is_admin_raw":user.is_admin,"is_admin_type":type(user.is_admin).__name__,"is_wvsu":is_wvsu_email(email),"will_block":not is_admin_value and not is_wvsu_email(email)},"timestamp":int(time.time()*1000)}) + '\n')
-                f.flush()
-        except Exception as log_err:
-            print(f"DEBUG LOG ERROR (ADMIN_CHECK): {log_err}")
-        # #endregion
         # Ensure is_admin is properly converted to boolean (handle NULL from PostgreSQL)
         user_is_admin = bool(user.is_admin) if user.is_admin is not None else False
         if not user_is_admin and not is_wvsu_email(email):
-            # #region agent log
-            try:
-                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"index.py:1013","message":"EMAIL_VALIDATION_BLOCKED","data":{"user_is_admin":user_is_admin,"is_admin_raw":user.is_admin,"is_wvsu":is_wvsu_email(email)},"timestamp":int(time.time()*1000)}) + '\n')
-                    f.flush()
-            except Exception as log_err:
-                print(f"DEBUG LOG ERROR (EMAIL_VALIDATION): {log_err}")
-            # #endregion
             return jsonify({'error': 'Only WVSU email addresses (@wvstateu.edu) are allowed'}), 400
 
         try:
-            # #region agent log
-            try:
-                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"index.py:956","message":"PASSWORD_CHECK_BEFORE","data":{"user_id":user.id,"has_password_hash":bool(user.password_hash)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             password_check_result = user.check_password(password)
-            # #region agent log
-            try:
-                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"index.py:956","message":"PASSWORD_CHECK_RESULT","data":{"result":password_check_result},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             if not password_check_result:
-                # #region agent log
-                try:
-                    with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"index.py:957","message":"PASSWORD_CHECK_FAILED","data":{},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-                except: pass
-                # #endregion
                 return jsonify({'error': 'Invalid credentials'}), 401
         except Exception as password_error:
-            # #region agent log
-            try:
-                with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"index.py:958","message":"PASSWORD_CHECK_EXCEPTION","data":{"error":str(password_error)},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             print(f"Error checking password: {password_error}")
             import traceback
             traceback.print_exc()
@@ -1212,23 +1156,11 @@ def login():
             print(f"Session error (non-critical): {session_error}")
             # Session error is not critical, continue with login
 
-        # #region agent log
-        try:
-            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C","location":"index.py:970","message":"LOGIN_SUCCESS","data":{"user_id":user.id,"user_email":user.email,"user_is_admin":user.is_admin},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-        except: pass
-        # #endregion
         return jsonify({
             'message': 'Login successful', 
             'user': user.to_dict()
         })
     except Exception as e:
-        # #region agent log
-        try:
-            with open('/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"index.py:975","message":"LOGIN_EXCEPTION","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(__import__('time').time()*1000)}) + '\n')
-        except: pass
-        # #endregion
         print(f"Unexpected error in login: {e}")
         import traceback
         traceback.print_exc()
@@ -1405,43 +1337,7 @@ def admin_dashboard():
 @admin_required
 def admin_fetch_opportunities():
     """Manually trigger opportunity fetch from all sources"""
-    # Force print to console first (this will definitely show)
-    print("=" * 60)
-    print("ADMIN FETCH OPPORTUNITIES ENDPOINT CALLED")
-    print("=" * 60)
-    
-    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
-    
-    # #region agent log - Log BEFORE any operations
-    print(f"Attempting to write to log file: {log_path}")
     try:
-        import os
-        print(f"Log file exists: {os.path.exists(log_path)}")
-        print(f"Log file writable: {os.access(log_path, os.W_OK) if os.path.exists(log_path) else 'N/A'}")
-    except: pass
-    
-    try:
-        import json
-        from datetime import datetime
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'admin-ui-test',
-                'hypothesisId': 'A',
-                'location': 'index.py:1007',
-                'message': 'admin_fetch_opportunities endpoint ENTRY',
-                'data': {'method': 'POST', 'has_user': bool(get_current_user())},
-                'timestamp': int(datetime.utcnow().timestamp() * 1000)
-            }) + '\n')
-    except Exception as log_err:
-        print(f"DEBUG: Failed to write admin endpoint log: {log_err}")
-        import traceback
-        traceback.print_exc()
-    # #endregion
-    
-    try:
-        print("Admin triggered opportunity fetch...")
-        
         fetch_all_opportunities, _ = get_fetch_functions()
         # Ensure we're in app context for database operations
         try:
@@ -1454,52 +1350,13 @@ def admin_fetch_opportunities():
             except Exception as cleanup_err:
                 print(f"Warning: Failed to cleanup database session: {cleanup_err}")
         
-        # #region agent log
-        try:
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'admin-ui-test',
-                    'hypothesisId': 'A',
-                    'location': 'index.py:1020',
-                    'message': 'admin_fetch_opportunities completed',
-                    'data': {'results': results},
-                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
-                }) + '\n')
-        except Exception as log_err:
-            print(f"DEBUG: Failed to write completion log: {log_err}")
-        # #endregion
-        
         return jsonify({
             'message': 'Opportunities fetched successfully',
             'results': results
         })
     except Exception as e:
-        # #region agent log
         import traceback
-        error_traceback = traceback.format_exc()
-        try:
-            import json
-            from datetime import datetime
-            log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
-            with open(log_path, 'a') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'admin-ui-test',
-                    'hypothesisId': 'E',
-                    'location': 'index.py:1430',
-                    'message': 'admin_fetch_opportunities error',
-                    'data': {
-                        'error': str(e),
-                        'error_type': type(e).__name__,
-                        'error_traceback': error_traceback[:1000]
-                    },
-                    'timestamp': int(datetime.utcnow().timestamp() * 1000)
-                }) + '\n')
-        except: pass
-        # #endregion
         print(f"ERROR in admin fetch opportunities: {e}")
-        print(f"Full traceback:")
         traceback.print_exc()
         # Always return JSON, never HTML
         return jsonify({
@@ -1622,8 +1479,15 @@ def admin_promote_user():
 def debug_check_user():
     """
     Debug endpoint to check user data in database.
-    Helps diagnose login issues.
+    Only available in development or with DEBUG_TOKEN.
     """
+    # Only allow in development or with DEBUG_TOKEN
+    if os.environ.get('VERCEL'):
+        debug_token = os.environ.get('DEBUG_TOKEN')
+        provided_token = request.headers.get('X-Debug-Token') or (request.json.get('debug_token') if request.is_json else None)
+        if not debug_token or provided_token != debug_token:
+            return jsonify({'error': 'Not found'}), 404
+    
     try:
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()

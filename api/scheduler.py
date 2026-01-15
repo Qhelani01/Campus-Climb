@@ -64,25 +64,6 @@ def fetch_all_opportunities() -> Dict:
     Returns:
         Dictionary with fetch results summary
     """
-    # #region agent log
-    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'A',
-                'location': 'scheduler.py:58',
-                'message': 'fetch_all_opportunities entry',
-                'data': {},
-                'timestamp': int(datetime.utcnow().timestamp() * 1000)
-            }) + '\n')
-    except Exception as log_err:
-        print(f"DEBUG: Failed to write log entry: {log_err}")
-        import traceback
-        traceback.print_exc()
-    # #endregion
-    
     # Import here to avoid circular dependency
     FetcherConfig = get_fetcher_config()
     fetcher_classes = get_fetchers()

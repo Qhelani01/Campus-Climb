@@ -231,21 +231,6 @@ def save_or_update_opportunity(opportunity_dict: Dict, db=None, Opportunity=None
     Returns:
         Tuple of (opportunity_object, is_new)
     """
-    log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
-    # #region agent log
-    try:
-        with open(log_path, 'a') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'C',
-                'location': 'deduplicator.py:132',
-                'message': 'save_or_update_opportunity entry',
-                'data': {'title': opportunity_dict.get('title', '')[:50], 'source': opportunity_dict.get('source'), 'source_id': opportunity_dict.get('source_id'), 'db_provided': db is not None, 'Opportunity_provided': Opportunity is not None},
-                'timestamp': int(datetime.utcnow().timestamp() * 1000)
-            }) + '\n')
-    except: pass
-    # #endregion
     
     # Always get db and Opportunity from Flask app context to ensure they're bound correctly
     db = get_db()

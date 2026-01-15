@@ -19,17 +19,7 @@ class RSSFetcher(OpportunityFetcher):
     
     def fetch(self) -> List[Dict]:
         """Fetch opportunities from RSS feed"""
-        log_path = '/Users/qhelanimoyo/Desktop/Projects/Campus Climb/.cursor/debug.log'
         try:
-            # #region agent log
-            try:
-                with open(log_path, 'a') as f:
-                    f.write(json.dumps({
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'B',
-                        'location': 'rss_fetcher.py:18',
-                        'message': 'RSS fetch entry',
                         'data': {'source_name': self.source_name, 'feed_url': self.feed_url},
                         'timestamp': int(datetime.utcnow().timestamp() * 1000)
                     }) + '\n')
