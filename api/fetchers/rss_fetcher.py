@@ -10,6 +10,15 @@ from api.opportunity_fetchers import OpportunityFetcher
 import json
 import os
 
+# Import AI filter (with fallback if not available)
+try:
+    from api.ai_filter import classify_opportunity
+    from api.config import Config
+    AI_FILTER_AVAILABLE = True
+except ImportError:
+    AI_FILTER_AVAILABLE = False
+    classify_opportunity = None
+
 class RSSFetcher(OpportunityFetcher):
     """Fetcher for RSS/Atom feeds"""
     
@@ -20,6 +29,16 @@ class RSSFetcher(OpportunityFetcher):
     def fetch(self) -> List[Dict]:
         """Fetch opportunities from RSS feed"""
         try:
+            # #region agent log
+            log_path = os.path.join(os.path.dirname(__file__), '..', 'fetch_debug.log')
+            try:
+                with open(log_path, 'a') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'A',
+                        'location': 'rss_fetcher.py:20',
+                        'message': 'Before RSS fetch',
                         'data': {'source_name': self.source_name, 'feed_url': self.feed_url},
                         'timestamp': int(datetime.utcnow().timestamp() * 1000)
                     }) + '\n')
@@ -165,7 +184,7 @@ class RSSFetcher(OpportunityFetcher):
             return []
     
     def parse_entry(self, entry: Dict) -> Optional[Dict]:
-        """Parse a single RSS entry"""
+        """Parse a single RSS entry with optional AI filtering"""
         # Extract basic info
         title = entry.get('title', '').strip()
         if not title:
@@ -182,6 +201,44 @@ class RSSFetcher(OpportunityFetcher):
         
         # Clean HTML from description
         description = self.clean_html(description)
+        
+        # Optional AI filtering for non-Reddit sources (if enabled globally)
+        # RedditJobsFetcher handles its own AI filtering, so skip here to avoid double filtering
+        if AI_FILTER_AVAILABLE and classify_opportunity and 'reddit' not in self.source_name.lower():
+            try:
+                # Check if AI filtering should be applied to this source
+                # Only apply if explicitly enabled and not a Reddit source (Reddit has its own handler)
+                if Config.is_ai_filter_enabled():
+                    classification = classify_opportunity(title, description, self.source_name)
+                    is_opportunity = classification.get('is_opportunity')
+                    
+                    # Log AI filter decision
+                    confidence = classification.get('confidence', 0.0)
+                    reasoning = classification.get('reasoning', '')
+                    print(f"AI FILTER (RSS): title='{title[:50]}...' source={self.source_name} is_opportunity={is_opportunity} confidence={confidence:.2f}")
+                    
+                    # If AI returned None (needs fallback)
+                    if is_opportunity is None:
+                        if Config.AI_FILTER_FALLBACK:
+                            # Use keyword fallback
+                            is_opportunity = keyword_based_filter_fallback(title, description, self.source_name)
+                            print(f"AI FILTER FALLBACK (RSS): Using keyword filtering, result={is_opportunity}")
+                        else:
+                            # Reject if fallback disabled
+                            return None
+                    
+                    # Reject if not an opportunity
+                    if not is_opportunity:
+                        return None
+            except Exception as e:
+                # AI filter error, use fallback if enabled
+                print(f"AI FILTER EXCEPTION (RSS): {str(e)}")
+                if Config.AI_FILTER_FALLBACK:
+                    is_opportunity = keyword_based_filter_fallback(title, description, self.source_name)
+                    if not is_opportunity:
+                        return None
+                else:
+                    return None
         
         # Get link
         link = entry.get('link', '')
@@ -312,6 +369,78 @@ class EventbriteFetcher(RSSFetcher):
         )
 
 
+def keyword_based_filter_fallback(title: str, description: str, source_name: str) -> bool:
+    """
+    Fallback keyword-based filtering when AI is unavailable.
+    
+    Args:
+        title: Post title
+        description: Post description
+        source_name: Source name
+    
+    Returns:
+        bool: True if appears to be an opportunity, False otherwise
+    """
+    combined_text = (title + ' ' + description).lower()
+    
+    # Filter out posts from people looking for work
+    exclude_patterns = [
+        '[for hire]', '[for hire', 'for hire]', 'for hire',
+        '[for-hire]', 'for-hire',
+        'seeking', 'looking for', 'available for',
+        'i am', 'i\'m looking', 'i need',
+        'hire me', 'hire us',
+        'freelancer available', 'developer available',
+        'open to work', 'open for work',
+        'job seeker', 'jobseeker',
+        'resume', 'portfolio', 'cv',
+        'can help', 'can assist', 'i can',
+        'my services', 'my skills',
+    ]
+    
+    # Check if title/description contains exclusion patterns
+    for pattern in exclude_patterns:
+        if pattern in combined_text:
+            # Double-check: make sure it's not a hiring post that mentions "for hire" in a different context
+            # If it contains [HIRING] or [Hiring], it's likely an opportunity
+            if '[hiring]' in combined_text or '[hiring' in combined_text:
+                break  # It's a hiring post, keep it
+            return False  # It's a "for hire" post, skip it
+    
+    # Only include posts that are actual opportunities
+    # Look for hiring indicators
+    hiring_patterns = [
+        '[hiring]', '[hiring', 'hiring]',
+        '[hiring:', 'hiring:',
+        'we are hiring', 'we\'re hiring',
+        'now hiring', 'currently hiring',
+        'job opening', 'job opportunity',
+        'position available', 'positions available',
+        'looking to hire', 'looking for a',
+        'internship', 'intern position',
+        'entry level', 'junior',
+        'full-time', 'part-time',
+        'remote position', 'remote role',
+    ]
+    
+    # Check if it contains hiring indicators
+    is_opportunity = any(pattern in combined_text for pattern in hiring_patterns)
+    
+    # If no clear hiring indicator, but also no exclusion pattern, 
+    # check if it's from a job-focused subreddit (might be worth including)
+    if not is_opportunity:
+        # For job-focused subreddits, be more lenient
+        job_subreddits = ['jobbit', 'jobs', 'jobopenings', 'hiring']
+        if any(sub in source_name.lower() for sub in job_subreddits):
+            # If it doesn't have exclusion patterns, include it
+            return True
+        else:
+            # For other subreddits, require clear hiring indicator
+            return False
+    
+    return is_opportunity
+
+
 class RedditJobsFetcher(RSSFetcher):
     """Fetcher for Reddit job board RSS feeds"""
     
@@ -322,7 +451,7 @@ class RedditJobsFetcher(RSSFetcher):
         )
     
     def parse_entry(self, entry: Dict) -> Optional[Dict]:
-        """Parse a single RSS entry, filtering out 'For Hire' posts"""
+        """Parse a single RSS entry using AI filtering with keyword fallback"""
         # First check if this is an actual opportunity (not someone looking for work)
         title = entry.get('title', '').strip()
         if not title:
@@ -338,62 +467,57 @@ class RedditJobsFetcher(RSSFetcher):
             description = entry.content[0].get('value', '')
         
         description = self.clean_html(description)
-        combined_text = (title + ' ' + description).lower()
         
-        # Filter out posts from people looking for work
-        exclude_patterns = [
-            '[for hire]', '[for hire', 'for hire]', 'for hire',
-            '[for-hire]', 'for-hire',
-            'seeking', 'looking for', 'available for',
-            'i am', 'i\'m looking', 'i need',
-            'hire me', 'hire us',
-            'freelancer available', 'developer available',
-            'open to work', 'open for work',
-            'job seeker', 'jobseeker',
-            'resume', 'portfolio', 'cv',
-            'can help', 'can assist', 'i can',
-            'my services', 'my skills',
-        ]
+        # Try AI filtering first
+        is_opportunity = None
+        confidence = 0.0
+        reasoning = ''
+        filter_method = 'unknown'
         
-        # Check if title/description contains exclusion patterns
-        for pattern in exclude_patterns:
-            if pattern in combined_text:
-                # Double-check: make sure it's not a hiring post that mentions "for hire" in a different context
-                # If it contains [HIRING] or [Hiring], it's likely an opportunity
-                if '[hiring]' in combined_text or '[hiring' in combined_text:
-                    break  # It's a hiring post, keep it
-                return None  # It's a "for hire" post, skip it
+        if AI_FILTER_AVAILABLE and classify_opportunity:
+            try:
+                classification = classify_opportunity(title, description, self.source_name)
+                is_opportunity = classification.get('is_opportunity')
+                confidence = classification.get('confidence', 0.0)
+                reasoning = classification.get('reasoning', '')
+                error = classification.get('error')
+                
+                # Log AI filter decision
+                print(f"AI FILTER: title='{title[:50]}...' is_opportunity={is_opportunity} confidence={confidence:.2f} reasoning='{reasoning[:100]}...'")
+                
+                # If AI returned None (needs fallback) or error occurred
+                if is_opportunity is None:
+                    filter_method = 'fallback'
+                    # Use keyword fallback if enabled
+                    if Config.AI_FILTER_FALLBACK:
+                        is_opportunity = keyword_based_filter_fallback(title, description, self.source_name)
+                        print(f"AI FILTER FALLBACK: Using keyword filtering, result={is_opportunity}")
+                    else:
+                        # If fallback disabled and AI failed, reject
+                        print(f"AI FILTER ERROR: {error}, fallback disabled, rejecting")
+                        return None
+                else:
+                    filter_method = 'ai'
+            except Exception as e:
+                # AI filter error, use fallback
+                print(f"AI FILTER EXCEPTION: {str(e)}, using fallback")
+                filter_method = 'fallback'
+                if Config.AI_FILTER_FALLBACK:
+                    is_opportunity = keyword_based_filter_fallback(title, description, self.source_name)
+                else:
+                    return None
+        else:
+            # AI filter not available, use keyword fallback
+            filter_method = 'keyword'
+            is_opportunity = keyword_based_filter_fallback(title, description, self.source_name)
+            print(f"AI FILTER: Not available, using keyword filtering, result={is_opportunity}")
         
-        # Only include posts that are actual opportunities
-        # Look for hiring indicators
-        hiring_patterns = [
-            '[hiring]', '[hiring', 'hiring]',
-            '[hiring:', 'hiring:',
-            'we are hiring', 'we\'re hiring',
-            'now hiring', 'currently hiring',
-            'job opening', 'job opportunity',
-            'position available', 'positions available',
-            'looking to hire', 'looking for a',
-            'internship', 'intern position',
-            'entry level', 'junior',
-            'full-time', 'part-time',
-            'remote position', 'remote role',
-        ]
-        
-        # Check if it contains hiring indicators
-        is_opportunity = any(pattern in combined_text for pattern in hiring_patterns)
-        
-        # If no clear hiring indicator, but also no exclusion pattern, 
-        # check if it's from a job-focused subreddit (might be worth including)
+        # If not an opportunity, reject
         if not is_opportunity:
-            # For job-focused subreddits, be more lenient
-            job_subreddits = ['jobbit', 'jobs', 'jobopenings', 'hiring']
-            if any(sub in self.source_name.lower() for sub in job_subreddits):
-                # If it doesn't have exclusion patterns, include it
-                pass  # Will continue to parse
-            else:
-                # For other subreddits, require clear hiring indicator
-                return None
+            return None
+        
+        # Log successful classification
+        print(f"OPPORTUNITY ACCEPTED: title='{title[:50]}...' method={filter_method} confidence={confidence:.2f}")
         
         # Call parent parse_entry to process the valid opportunity
         return super().parse_entry(entry)
