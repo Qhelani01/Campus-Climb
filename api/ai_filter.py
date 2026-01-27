@@ -8,11 +8,8 @@ import re
 from typing import Dict, Optional
 try:
     from api.config import Config
-    from api.ai_assistant import call_ollama
 except ImportError:
     from config import Config
-    # Fallback if ai_assistant not available
-    call_ollama = None
 
 
 def build_classification_prompt(title: str, description: str, source: str) -> str:
@@ -27,8 +24,8 @@ def build_classification_prompt(title: str, description: str, source: str) -> st
     Returns:
         str: Formatted prompt for the LLM
     """
-    # Truncate description if too long (to avoid token limits)
-    max_description_length = 1000
+    # Truncate description to keep prompt small (faster inference, less timeout risk)
+    max_description_length = 500
     if len(description) > max_description_length:
         description = description[:max_description_length] + "..."
     
@@ -164,28 +161,24 @@ def classify_opportunity(title: str, description: str, source: str = 'unknown') 
     # Get model to use
     model = Config.AI_FILTER_MODEL or Config.OLLAMA_MODEL
     
-    # Call Ollama
+    # Call Ollama directly with AI filter timeout (avoids ai_assistant's 60s limit; first run can be slow)
+    url = Config.get_ollama_url()
+    timeout = getattr(Config, 'AI_FILTER_TIMEOUT', None) or getattr(Config, 'OLLAMA_TIMEOUT', 120)
+    
     try:
-        if call_ollama:
-            ollama_response = call_ollama(prompt, model=model)
-        else:
-            # Direct call if ai_assistant not available
-            url = Config.get_ollama_url()
-            timeout = Config.AI_FILTER_TIMEOUT or Config.OLLAMA_TIMEOUT
-            
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "stream": False
-            }
-            
-            response = requests.post(
-                url,
-                json=payload,
-                timeout=timeout
-            )
-            response.raise_for_status()
-            ollama_response = response.json()
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False
+        }
+        
+        response = requests.post(
+            url,
+            json=payload,
+            timeout=timeout
+        )
+        response.raise_for_status()
+        ollama_response = response.json()
         
         # Parse response
         response_text = ollama_response.get('response', '')
@@ -201,7 +194,7 @@ def classify_opportunity(title: str, description: str, source: str = 'unknown') 
             'is_opportunity': None,  # None triggers fallback
             'confidence': 0.0,
             'reasoning': 'AI classification timed out',
-            'error': f'Request timed out after {Config.AI_FILTER_TIMEOUT or Config.OLLAMA_TIMEOUT} seconds'
+            'error': f'Request timed out after {timeout} seconds'
         }
     except requests.exceptions.ConnectionError:
         return {

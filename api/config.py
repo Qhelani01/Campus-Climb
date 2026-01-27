@@ -19,7 +19,7 @@ class Config:
     # AI Filter Settings
     AI_FILTER_ENABLED = os.environ.get('AI_FILTER_ENABLED', 'true').lower() == 'true'
     AI_FILTER_MODEL = os.environ.get('AI_FILTER_MODEL', None)  # None = use OLLAMA_MODEL
-    AI_FILTER_TIMEOUT = int(os.environ.get('AI_FILTER_TIMEOUT', '10'))  # 10 seconds default
+    AI_FILTER_TIMEOUT = int(os.environ.get('AI_FILTER_TIMEOUT', '120'))  # 120s default (llama loads slowly on first run)
     AI_FILTER_FALLBACK = os.environ.get('AI_FILTER_FALLBACK', 'true').lower() == 'true'
     
     @staticmethod

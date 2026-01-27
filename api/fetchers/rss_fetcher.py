@@ -371,7 +371,8 @@ class EventbriteFetcher(RSSFetcher):
 
 def keyword_based_filter_fallback(title: str, description: str, source_name: str) -> bool:
     """
-    Fallback keyword-based filtering when AI is unavailable.
+    Improved fallback keyword-based filtering when AI is unavailable.
+    This version is stricter and filters out questions, discussions, and requests for help.
     
     Args:
         title: Post title
@@ -382,6 +383,37 @@ def keyword_based_filter_fallback(title: str, description: str, source_name: str
         bool: True if appears to be an opportunity, False otherwise
     """
     combined_text = (title + ' ' + description).lower()
+    
+    # STRICT: Filter out questions and requests for help FIRST
+    question_patterns = [
+        'how do i', 'how can i', 'how to', 'how should i',
+        'what is', 'what are', 'what\'s the', 'what are the',
+        'where can i', 'where do i', 'where should i',
+        'when should i', 'when do i', 'when can i',
+        'why should i', 'why do i',
+        'looking for advice', 'need advice', 'seeking advice',
+        'any suggestions', 'any recommendations', 'any tips',
+        'can someone help', 'can anyone help', 'help me',
+        'i need help', 'i\'m looking for', 'i am looking for',
+        'does anyone know', 'has anyone', 'anyone here',
+        'should i', 'do i need', 'is it worth',
+        '?',  # Question mark in title is a strong indicator
+    ]
+    
+    # Check if title starts with question words (very strong indicator)
+    title_lower = title.lower().strip()
+    question_starters = ['how', 'what', 'where', 'when', 'why', 'who', 'which', 'can', 'should', 'do', 'does', 'is', 'are']
+    if any(title_lower.startswith(starter + ' ') for starter in question_starters):
+        # Unless it's clearly a job posting (e.g., "How to Apply: Software Engineer")
+        if not any(indicator in combined_text for indicator in ['apply', 'application', 'hiring', 'position', 'role', 'job opening']):
+            return False
+    
+    # Check for question patterns in combined text
+    for pattern in question_patterns:
+        if pattern in combined_text:
+            # Only allow if it's clearly part of a job posting (e.g., "How to apply: ...")
+            if not any(indicator in combined_text for indicator in ['apply', 'application', 'hiring', 'position', 'role', 'job opening', '[hiring]']):
+                return False
     
     # Filter out posts from people looking for work
     exclude_patterns = [
@@ -407,38 +439,53 @@ def keyword_based_filter_fallback(title: str, description: str, source_name: str
                 break  # It's a hiring post, keep it
             return False  # It's a "for hire" post, skip it
     
-    # Only include posts that are actual opportunities
-    # Look for hiring indicators
-    hiring_patterns = [
+    # STRICT: Only include posts that have STRONG hiring indicators
+    # Require explicit hiring language, not just keywords
+    strong_hiring_patterns = [
         '[hiring]', '[hiring', 'hiring]',
         '[hiring:', 'hiring:',
-        'we are hiring', 'we\'re hiring',
+        'we are hiring', 'we\'re hiring', 'we are looking for',
         'now hiring', 'currently hiring',
-        'job opening', 'job opportunity',
+        'job opening', 'job opportunity', 'job posting',
         'position available', 'positions available',
-        'looking to hire', 'looking for a',
-        'internship', 'intern position',
-        'entry level', 'junior',
-        'full-time', 'part-time',
-        'remote position', 'remote role',
+        'looking to hire', 'looking for a', 'seeking a',
+        'apply now', 'apply at', 'apply here', 'application',
+        'join our team', 'join us',
     ]
     
-    # Check if it contains hiring indicators
-    is_opportunity = any(pattern in combined_text for pattern in hiring_patterns)
+    # Check if it contains strong hiring indicators
+    has_strong_indicator = any(pattern in combined_text for pattern in strong_hiring_patterns)
     
-    # If no clear hiring indicator, but also no exclusion pattern, 
-    # check if it's from a job-focused subreddit (might be worth including)
-    if not is_opportunity:
-        # For job-focused subreddits, be more lenient
+    # For internships/workshops, require explicit announcement language
+    opportunity_type_patterns = [
+        'internship program', 'internship opportunity', 'internship position',
+        'workshop on', 'workshop: ', 'workshop -', 'attend our workshop',
+        'conference:', 'conference -', 'attend our conference',
+        'competition:', 'competition -', 'enter our competition',
+    ]
+    
+    has_type_indicator = any(pattern in combined_text for pattern in opportunity_type_patterns)
+    
+    # STRICT: Require either strong hiring indicator OR explicit opportunity type announcement
+    # Don't just match on keywords like "internship" or "workshop" alone
+    if not has_strong_indicator and not has_type_indicator:
+        # Check if it's a job-focused subreddit - but still be strict
         job_subreddits = ['jobbit', 'jobs', 'jobopenings', 'hiring']
         if any(sub in source_name.lower() for sub in job_subreddits):
-            # If it doesn't have exclusion patterns, include it
-            return True
+            # Even in job subreddits, require some indicator it's an opportunity
+            # Don't just include everything
+            return False
         else:
-            # For other subreddits, require clear hiring indicator
+            # For other subreddits, definitely require clear indicator
             return False
     
-    return is_opportunity
+    # Additional check: If it has keywords but sounds like a question, reject
+    if any(kw in combined_text for kw in ['internship', 'workshop', 'job']) and not has_strong_indicator:
+        # Check if it's phrased as a question or request
+        if any(q in combined_text for q in ['how', 'what', 'where', 'when', 'why', '?']):
+            return False
+    
+    return True
 
 
 class RedditJobsFetcher(RSSFetcher):
