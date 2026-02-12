@@ -227,6 +227,12 @@ class RSSFetcher(OpportunityFetcher):
                             # Reject if fallback disabled
                             return None
                     
+                    # Confidence threshold: reject low-confidence positives
+                    min_conf = getattr(Config, 'AI_FILTER_MIN_CONFIDENCE', 0.7)
+                    if is_opportunity and confidence < min_conf:
+                        print(f"AI FILTER (RSS): Rejecting low-confidence positive (conf={confidence:.2f} < {min_conf})")
+                        is_opportunity = False
+                    
                     # Reject if not an opportunity
                     if not is_opportunity:
                         return None
@@ -545,6 +551,11 @@ class RedditJobsFetcher(RSSFetcher):
                         return None
                 else:
                     filter_method = 'ai'
+                    # Confidence threshold: reject low-confidence positives to reduce false positives
+                    min_conf = getattr(Config, 'AI_FILTER_MIN_CONFIDENCE', 0.7)
+                    if is_opportunity and confidence < min_conf:
+                        print(f"AI FILTER: Rejecting low-confidence positive (conf={confidence:.2f} < {min_conf})")
+                        is_opportunity = False
             except Exception as e:
                 # AI filter error, use fallback
                 print(f"AI FILTER EXCEPTION: {str(e)}, using fallback")
