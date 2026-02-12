@@ -61,10 +61,13 @@ Analyze the content above and classify it. Respond ONLY with a valid JSON object
     "reasoning": "brief explanation of your classification"
 }}
 
-Important: 
-- If the post is asking a question, seeking advice, or discussing opportunities (rather than offering one), classify as false.
-- If the post is clearly offering a job, internship, workshop, or similar opportunity, classify as true.
-- Be strict: when in doubt, classify as false to avoid false positives.
+CRITICAL RULES - BE STRICT:
+- Questions (how, what, where, when, why, any?) = ALWAYS false
+- Seeking advice, recommendations, or tips = ALWAYS false
+- Discussions about opportunities (not offering one) = ALWAYS false
+- "Looking for" from a job seeker (not employer) = ALWAYS false
+- Only classify true if the post is EXPLICITLY offering a real opportunity (employer posting job/internship, organizer announcing workshop, etc.)
+- When in doubt, classify as false to avoid false positives.
 """
     return prompt
 
@@ -80,7 +83,18 @@ def parse_classification_response(response_text: str) -> Dict:
         dict: Parsed classification with 'is_opportunity', 'confidence', 'reasoning'
     """
     # Try to extract JSON from response (may have extra text)
-    # Look for JSON object in the response
+    # First try: look for "is_opportunity": true/false (use first occurrence as the actual answer)
+    opp_match = re.search(r'"is_opportunity"\s*:\s*(true|false)', response_text, re.IGNORECASE)
+    if opp_match:
+        is_opportunity = opp_match.group(1).lower() == 'true'
+        conf_match = re.search(r'"confidence"\s*:\s*([\d.]+)', response_text)
+        confidence = float(conf_match.group(1)) if conf_match else 0.5
+        confidence = max(0.0, min(1.0, confidence))
+        reason_match = re.search(r'"reasoning"\s*:\s*"([^"]*)"', response_text)
+        reasoning = reason_match.group(1) if reason_match else 'Parsed from response'
+        return {'is_opportunity': is_opportunity, 'confidence': confidence, 'reasoning': reasoning}
+    
+    # Fallback: try full JSON parse (handles simple case)
     json_match = re.search(r'\{[^{}]*"is_opportunity"[^{}]*\}', response_text, re.DOTALL)
     if json_match:
         try:
@@ -100,23 +114,11 @@ def parse_classification_response(response_text: str) -> Dict:
             # If JSON parsing fails, try to infer from text
             pass
     
-    # Fallback: try to infer from response text
-    response_lower = response_text.lower()
-    if 'true' in response_lower and 'false' not in response_lower:
-        is_opportunity = True
-    elif 'false' in response_lower:
-        is_opportunity = False
-    elif 'opportunity' in response_lower and ('yes' in response_lower or 'is' in response_lower):
-        # Try to infer from context
-        is_opportunity = 'not' not in response_lower and 'no' not in response_lower
-    else:
-        # Default to false if unclear
-        is_opportunity = False
-    
+    # Fallback: when JSON parsing fails, default to False to avoid false positives
     return {
-        'is_opportunity': is_opportunity,
-        'confidence': 0.5,  # Low confidence for fallback
-        'reasoning': f'Parsed from text (may be inaccurate): {response_text[:200]}'
+        'is_opportunity': False,
+        'confidence': 0.3,
+        'reasoning': f'Parse failed, rejecting to avoid false positive: {response_text[:100]}'
     }
 
 

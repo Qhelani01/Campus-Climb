@@ -21,6 +21,7 @@ class Config:
     AI_FILTER_MODEL = os.environ.get('AI_FILTER_MODEL', None)  # None = use OLLAMA_MODEL
     AI_FILTER_TIMEOUT = int(os.environ.get('AI_FILTER_TIMEOUT', '120'))  # 120s default (llama loads slowly on first run)
     AI_FILTER_FALLBACK = os.environ.get('AI_FILTER_FALLBACK', 'true').lower() == 'true'
+    AI_FILTER_MIN_CONFIDENCE = float(os.environ.get('AI_FILTER_MIN_CONFIDENCE', '0.7'))  # Reject AI "true" if confidence below this
     
     @staticmethod
     def get_ollama_url():
