@@ -22,6 +22,11 @@ class Config:
     AI_FILTER_TIMEOUT = int(os.environ.get('AI_FILTER_TIMEOUT', '120'))  # 120s default (llama loads slowly on first run)
     AI_FILTER_FALLBACK = os.environ.get('AI_FILTER_FALLBACK', 'true').lower() == 'true'
     AI_FILTER_MIN_CONFIDENCE = float(os.environ.get('AI_FILTER_MIN_CONFIDENCE', '0.7'))  # Reject AI "true" if confidence below this
+    # When True, reject opportunities when Ollama is unavailable (no keyword fallback) - avoids false positives
+    AI_FILTER_REJECT_ON_ERROR = os.environ.get('AI_FILTER_REJECT_ON_ERROR', 'true').lower() == 'true'
+    # Comma-separated source names that skip AI filter (e.g. "jooble,authentic_jobs" - API job boards are usually clean)
+    SOURCES_SKIP_AI_FILTER_STR = os.environ.get('SOURCES_SKIP_AI_FILTER', '')
+    SOURCES_SKIP_AI_FILTER = [s.strip().lower() for s in SOURCES_SKIP_AI_FILTER_STR.split(',') if s.strip()]
     
     @staticmethod
     def get_ollama_url():
