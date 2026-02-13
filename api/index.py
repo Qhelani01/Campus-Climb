@@ -1,3 +1,9 @@
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root (for local dev; Vercel uses dashboard env vars)
+load_dotenv(Path(__file__).resolve().parent.parent / '.env')
+
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session

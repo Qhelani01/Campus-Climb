@@ -76,8 +76,6 @@ Campus Climb/
 │   └── fetchers/                # Fetcher implementations
 │       ├── rss_fetcher.py       # RSS feed fetcher
 │       └── api_fetchers.py      # API-based fetchers
-├── backend/                      # Data storage (legacy)
-│   └── data/
 ├── frontend/                     # Frontend application
 │   ├── index.html              # Main HTML file
 │   ├── Campus Climb LOGO.png    # Logo
