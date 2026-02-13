@@ -212,3 +212,89 @@ def classify_opportunity(title: str, description: str, source: str = 'unknown') 
             'reasoning': f'AI classification error: {str(e)}',
             'error': str(e)
         }
+
+
+def keyword_based_filter_fallback(title: str, description: str, source_name: str) -> bool:
+    """
+    Stricter keyword-based filtering when AI is unavailable.
+    Filters out questions, discussions, and "for hire" posts.
+    """
+    combined_text = (title + ' ' + (description or '')).lower()
+    title_lower = (title or '').lower().strip()
+
+    # Question starters -> reject unless clear job posting
+    question_starters = ['how', 'what', 'where', 'when', 'why', 'who', 'which', 'can', 'should', 'do', 'does', 'is', 'are']
+    if any(title_lower.startswith(s + ' ') for s in question_starters):
+        if not any(x in combined_text for x in ['apply', 'application', 'hiring', 'position', 'role', 'job opening']):
+            return False
+
+    question_patterns = [
+        'how do i', 'how can i', 'how to', 'what is', 'what are', 'looking for advice', 'need advice',
+        'any suggestions', 'can someone help', 'i\'m looking for', 'i am looking for', 'does anyone know', 'has anyone',
+    ]
+    for pattern in question_patterns:
+        if pattern in combined_text:
+            if not any(x in combined_text for x in ['apply', 'application', 'hiring', 'position', 'role', 'job opening', '[hiring]']):
+                return False
+
+    # "For hire" / job seeker posts
+    exclude = ['[for hire]', 'for hire', '[for-hire]', 'hire me', 'open to work', 'job seeker', 'my services']
+    for pattern in exclude:
+        if pattern in combined_text and '[hiring]' not in combined_text:
+            return False
+
+    # Require strong hiring/opportunity language
+    strong = ['[hiring]', 'we are hiring', 'job opening', 'position available', 'apply now', 'join our team',
+              'internship program', 'workshop on', 'conference:', 'competition:']
+    if not any(p in combined_text for p in strong):
+        return False
+
+    return True
+
+
+def should_save_opportunity(opp_dict: dict) -> bool:
+    """
+    Central gate: only return True if this opportunity should be saved (real opportunity).
+    Uses Ollama to classify; when Ollama is unavailable, rejects by default to avoid false positives.
+    """
+    title = (opp_dict.get('title') or '').strip()
+    description = (opp_dict.get('description') or '')[:500]
+    source = (opp_dict.get('source') or 'unknown').strip().lower()
+
+    # Skip AI for configured sources (e.g. structured API job boards)
+    skip_sources = getattr(Config, 'SOURCES_SKIP_AI_FILTER', []) or []
+    if source in skip_sources:
+        return True
+
+    if not Config.is_ai_filter_enabled():
+        return True  # Filter disabled -> allow all (backward compat)
+
+    if not title:
+        return False
+
+    classification = classify_opportunity(title, description, opp_dict.get('source') or 'unknown')
+    is_opportunity = classification.get('is_opportunity')
+    confidence = classification.get('confidence', 0.0)
+    error = classification.get('error')
+
+    if is_opportunity is True:
+        min_conf = getattr(Config, 'AI_FILTER_MIN_CONFIDENCE', 0.7)
+        if confidence < min_conf:
+            print(f"AI FILTER: Rejecting low-confidence (conf={confidence:.2f} < {min_conf}): {title[:50]}...")
+            return False
+        print(f"AI FILTER: Accept (conf={confidence:.2f}): {title[:50]}...")
+        return True
+
+    if is_opportunity is False:
+        print(f"AI FILTER: Reject (not opportunity): {title[:50]}...")
+        return False
+
+    # is_opportunity is None -> error (Ollama down, timeout, etc.)
+    reject_on_error = getattr(Config, 'AI_FILTER_REJECT_ON_ERROR', True)
+    if reject_on_error:
+        print(f"AI FILTER: Reject (Ollama error: {error}): {title[:50]}...")
+        return False
+    # Fallback to keyword filter
+    use_fallback = keyword_based_filter_fallback(title, description, source)
+    print(f"AI FILTER: Fallback keyword result={use_fallback}: {title[:50]}...")
+    return use_fallback

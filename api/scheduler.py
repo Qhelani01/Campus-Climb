@@ -68,8 +68,9 @@ def fetch_all_opportunities() -> Dict:
     FetcherConfig = get_fetcher_config()
     fetcher_classes = get_fetchers()
     
-    # Import deduplicator function - it will get db and Opportunity from Flask app context
+    # Import deduplicator and AI filter - every opportunity must pass AI gate before save
     from deduplicator import save_or_update_opportunity
+    from ai_filter import should_save_opportunity
     
     # #region agent log
     try:
@@ -260,6 +261,9 @@ def fetch_all_opportunities() -> Dict:
             
             for idx, opp_dict in enumerate(opportunities):
                 try:
+                    # Central AI gate: only save if Ollama (or fallback) says it's a real opportunity
+                    if not should_save_opportunity(opp_dict):
+                        continue  # Skip this opportunity (discussion, question, or rejected)
                     # #region agent log
                     try:
                         with open(log_path, 'a') as f:
